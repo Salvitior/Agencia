@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='imagenes/logosintexto.png') }}">
+    <title>{{ meta.title }}</title>
+    <meta name="description" content="{{ meta.description }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style/style.css') }}">
+    <style>
+        .legal-container { max-width: 800px; margin: 40px auto; padding: 40px; background: #fff; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+        .legal-container h1 { font-size: 1.8rem; color: #1a1a2e; margin-bottom: 8px; }
+        .legal-container h2 { font-size: 1.3rem; color: #333; margin-top: 32px; margin-bottom: 12px; }
+        .legal-container p, .legal-container li { color: #555; line-height: 1.7; font-size: 0.95rem; }
+        .legal-container ul { padding-left: 20px; }
+        .legal-container li { margin-bottom: 8px; }
+        .legal-date { color: #999; font-size: 0.85rem; margin-bottom: 32px; }
+        .legal-nav { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1px solid #eee; }
+        .legal-nav a { color: #e67e22; text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+        .cookie-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .cookie-table th, .cookie-table td { border: 1px solid #eee; padding: 10px 14px; text-align: left; font-size: 0.9rem; }
+        .cookie-table th { background: #f8f9fa; font-weight: 600; }
+    </style>
+</head>
+<body style="background: #f5f6fa;">
+    <header class="main-header" id="top">
+        <div class="logo-container">
+            <a href="{{ url_for('home') }}"><img src="{{ url_for('static', filename='imagenes/logo.png') }}" alt="Viatges Carcaixent" class="logo-premium"></a>
+        </div>
+    </header>
+
+    <div class="legal-container">
+        <div class="legal-nav">
+            <a href="{{ url_for('seo.politica_privacidad') }}">Privacidad</a>
+            <a href="{{ url_for('seo.politica_cookies') }}">Cookies</a>
+            <a href="{{ url_for('seo.condiciones_compra') }}">Condiciones de Compra</a>
+            <a href="{{ url_for('seo.politica_cancelacion') }}">Cancelaciones</a>
+            <a href="{{ url_for('seo.aviso_legal') }}">Aviso Legal</a>
+        </div>
+
+        <h1>Política de Cookies</h1>
+        <p class="legal-date">Última actualización: enero 2025</p>
+
+        <h2>1. ¿Qué son las Cookies?</h2>
+        <p>Las cookies son pequeños archivos de texto que se almacenan en tu dispositivo cuando visitas un sitio web. Nos permiten recordar tus preferencias y mejorar tu experiencia de navegación.</p>
+
+        <h2>2. Tipos de Cookies que Utilizamos</h2>
+
+        <table class="cookie-table">
+            <thead>
+                <tr><th>Tipo</th><th>Finalidad</th><th>Duración</th><th>Necesarias</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>Técnicas/Necesarias</strong></td><td>Funcionamiento del sitio, sesión de usuario, carrito de reservas</td><td>Sesión</td><td>Sí</td></tr>
+                <tr><td><strong>Funcionales</strong></td><td>Recordar preferencias (idioma, búsquedas recientes)</td><td>1 año</td><td>No</td></tr>
+                <tr><td><strong>Analíticas</strong></td><td>Estadísticas de uso anónimas para mejorar el servicio (Google Analytics)</td><td>2 años</td><td>No</td></tr>
+                <tr><td><strong>Marketing</strong></td><td>Publicidad personalizada y remarketing</td><td>1 año</td><td>No</td></tr>
+            </tbody>
+        </table>
+
+        <h2>3. Cookies de Terceros</h2>
+        <ul>
+            <li><strong>Stripe:</strong> Cookies necesarias para el procesamiento seguro de pagos.</li>
+            <li><strong>Duffel:</strong> Cookies técnicas para el componente de pago con tarjeta.</li>
+            <li><strong>Google Analytics:</strong> Cookies analíticas (si activadas por el usuario).</li>
+        </ul>
+
+        <h2>4. Gestión de Cookies</h2>
+        <p>Puedes gestionar tus preferencias de cookies en cualquier momento haciendo clic en el botón de configuración de cookies en la parte inferior del sitio, o a través de la configuración de tu navegador.</p>
+        <p>Ten en cuenta que desactivar las cookies técnicas/necesarias puede impedir el correcto funcionamiento del sitio y el proceso de reserva.</p>
+
+        <h2>5. Cómo Desactivar las Cookies en tu Navegador</h2>
+        <ul>
+            <li><strong>Chrome:</strong> Configuración → Privacidad y seguridad → Cookies</li>
+            <li><strong>Firefox:</strong> Opciones → Privacidad y seguridad</li>
+            <li><strong>Safari:</strong> Preferencias → Privacidad</li>
+            <li><strong>Edge:</strong> Configuración → Privacidad</li>
+        </ul>
+    </div>
+</body>
+</html>

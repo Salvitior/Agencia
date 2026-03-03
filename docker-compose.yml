@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: agencia_postgres
     environment:
-      POSTGRES_USER: agencia_user
-      POSTGRES_PASSWORD: agencia_pass_2024
-      POSTGRES_DB: agencia_db
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:-agencia_db}
       # Configuración de performance
       POSTGRES_INITDB_ARGS: "-E UTF8 --locale=es_ES.UTF-8"
     ports:
@@ -15,10 +15,10 @@ services:
     volumes:
       # Persistencia de datos
       - postgres_data:/var/lib/postgresql/data
-      # Script de inicialización (opcional)
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # Scripts de inicialización (opcional)
+      - ./database/init.sql:/docker-entrypoint-initdb.d
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U agencia_user -d agencia_db" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-agencia_db}" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -67,7 +67,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
       - GF_INSTALL_PLUGINS=redis-datasource
     volumes:
       - grafana_data:/var/lib/grafana
@@ -83,8 +83,8 @@ services:
     image: dpage/pgadmin4:latest
     container_name: agencia_pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@agencia.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@agencia.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?PGADMIN_PASSWORD is required}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
       - "5050:80"

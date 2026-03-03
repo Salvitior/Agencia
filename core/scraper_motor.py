@@ -23,7 +23,13 @@ class MotorBusqueda:
     """
     
     BASE_URL = "https://api.duffel.com"
-    DUFFEL_VERSION = "v2" # O una fecha específica si fuera necesario (ej: "beta")
+    DUFFEL_VERSION = "v2"
+    CLASE_MAP = {
+        'economy': 'economy',
+        'premium': 'premium_economy',
+        'business': 'business',
+        'first': 'first'
+    }
     
     def __init__(self):
         self.duffel_token = os.getenv('DUFFEL_API_TOKEN')
@@ -39,7 +45,7 @@ class MotorBusqueda:
         # Markup de Agencia (Comisión)
         try:
             self.markup_percent = Decimal(os.getenv('AGENCY_MARKUP_PERCENT', '0.0'))
-        except:
+        except (ValueError, TypeError, Exception):
             self.markup_percent = Decimal('0.0')
         
         # Máximo de ofertas a devolver por búsqueda (ordenadas por mejor precio)
@@ -95,6 +101,18 @@ class MotorBusqueda:
             return (amount * (1 + self.markup_percent / 100)).quantize(Decimal('0.01'))
         return amount
 
+    @staticmethod
+    def _parse_iso(dt_string):
+        """Convierte ISO datetime string (con posible 'Z') a datetime."""
+        return datetime.fromisoformat(dt_string.replace('Z', '+00:00'))
+
+    @staticmethod
+    def _build_passengers(adultos, ninos=0, bebes=0):
+        """Construye lista de pasajeros para payload Duffel."""
+        return ([{"type": "adult"}] * adultos +
+                [{"type": "child"}] * ninos +
+                [{"type": "infant_without_seat"}] * bebes)
+
     def _get_headers(self):
         return {
             "Authorization": f"Bearer {self.duffel_token}",
@@ -103,6 +121,18 @@ class MotorBusqueda:
             "Content-Type": "application/json",
             "Accept-Encoding": "gzip"
         }
+
+    def _duffel_get(self, url, params=None, default=None, label="API"):
+        """GET genérico contra Duffel con manejo de errores estándar."""
+        try:
+            response = requests.get(url, headers=self._get_headers(), params=params, timeout=10)
+            if response.status_code == 200:
+                return response.json()['data']
+            logger.error(f"❌ Error {label}: {response.text}")
+            return default
+        except Exception as e:
+            logger.error(f"❌ Excepción {label}: {e}")
+            return default
 
     def is_rate_limited(self):
         return bool(self.rate_limited_until and datetime.utcnow() < self.rate_limited_until)
@@ -233,17 +263,6 @@ class MotorBusqueda:
         self._limpiar_cache_antiguo()
 
         # 3. Construir Payload Duffel Standard
-        passengers = [{"type": "adult"} for _ in range(adultos)]
-        passengers.extend([{"type": "child"} for _ in range(ninos)])
-        passengers.extend([{"type": "infant_without_seat"} for _ in range(bebes)])
-
-        clase_map = {
-            'economy': 'economy',
-            'premium': 'premium_economy', 
-            'business': 'business',
-            'first': 'first'
-        }
-        
         payload = {
             "data": {
                 "slices": [{
@@ -251,10 +270,8 @@ class MotorBusqueda:
                     "destination": destino,
                     "departure_date": fecha
                 }],
-                "passengers": passengers,
-                "cabin_class": clase_map.get(clase, 'economy'),
-                # Optimización: Limitar conexiones si se desea, o dejar abierto
-                # "max_connections": 2 
+                "passengers": self._build_passengers(adultos, ninos, bebes),
+                "cabin_class": self.CLASE_MAP.get(clase, 'economy'),
             }
         }
 
@@ -274,11 +291,7 @@ class MotorBusqueda:
                 resultados_procesados = resultados_procesados[:self.search_results_limit]
                 logger.info(f"✅ Duffel top aplicado: {len(resultados_procesados)} ofertas (límite={self.search_results_limit}).")
                 
-                # Guardar en caché si hay resultados
-                if resultados_procesados:
-                    self.cache[cache_key] = (resultados_procesados, datetime.now())
-                else:
-                    self.cache[cache_key] = ([], datetime.now())
+                self.cache[cache_key] = (resultados_procesados, datetime.now())
                     
                 return resultados_procesados
             elif response.status_code == 429:
@@ -388,23 +401,25 @@ class MotorBusqueda:
                     for i, seg in enumerate(segments_raw):
                         tiempo_escala = None
                         if i < len(segments_raw) - 1:
-                            # Duffel ISO formats usually work with fromisoformat
-                            llegada = datetime.fromisoformat(seg['arriving_at'].replace('Z', '+00:00'))
-                            siguiente_salida = datetime.fromisoformat(segments_raw[i+1]['departing_at'].replace('Z', '+00:00'))
+                            llegada = self._parse_iso(seg['arriving_at'])
+                            siguiente_salida = self._parse_iso(segments_raw[i+1]['departing_at'])
                             delta = siguiente_salida - llegada
                             hours, remainder = divmod(delta.seconds, 3600)
                             minutes = remainder // 60
                             tiempo_escala = f"{hours}h {minutes}m"
+
+                        dt_salida = self._parse_iso(seg['departing_at'])
+                        dt_llegada = self._parse_iso(seg['arriving_at'])
 
                         segmentos.append({
                             'salida': seg['origin']['iata_code'],
                             'llegada': seg['destination']['iata_code'],
                             'ciudad_salida': seg['origin'].get('city_name', seg['origin']['name']),
                             'ciudad_llegada': seg['destination'].get('city_name', seg['destination']['name']),
-                            'hora_salida': datetime.fromisoformat(seg['departing_at'].replace('Z', '+00:00')).strftime("%H:%M"),
-                            'hora_llegada': datetime.fromisoformat(seg['arriving_at'].replace('Z', '+00:00')).strftime("%H:%M"),
-                            'fecha_salida': datetime.fromisoformat(seg['departing_at'].replace('Z', '+00:00')).strftime("%d %b"),
-                            'fecha_llegada': datetime.fromisoformat(seg['arriving_at'].replace('Z', '+00:00')).strftime("%d %b"),
+                            'hora_salida': dt_salida.strftime("%H:%M"),
+                            'hora_llegada': dt_llegada.strftime("%H:%M"),
+                            'fecha_salida': dt_salida.strftime("%d %b"),
+                            'fecha_llegada': dt_llegada.strftime("%d %b"),
                             'aerolinea': (seg.get('operating_carrier') or {}).get('name', aerolinea_nombre),
                             'vuelo': seg.get('operating_carrier_flight_number', 'N/A'),
                             'duracion': self._parse_duration(seg['duration']),
@@ -469,14 +484,14 @@ class MotorBusqueda:
     # ==========================================
     # 3. GESTIÓN DE ÓRDENES (CREATE, CANCEL)
     # ==========================================
-    def crear_order_duffel(self, offer_id, pasajeros_data, services=None, type='instant', payments=None):
+    def crear_order_duffel(self, offer_id, pasajeros_data, services=None, order_type='instant', payments=None):
         """
         Crea una orden en Duffel.
         - offer_id: ID de la oferta seleccionada
         - pasajeros_data: Lista de pasajeros con sus datos (y IDs de Duffel)
         - services: Lista de servicios extra [{'id': '...', 'quantity': 1}]
-        - type: 'instant' (pago inmediato) o 'hold' (reserva sin pago)
-        - payments: Lista de pagos (si type='instant')
+        - order_type: 'instant' (pago inmediato) o 'hold' (reserva sin pago)
+        - payments: Lista de pagos (si order_type='instant')
         """
         if not self.duffel_token: return {'success': False, 'error': 'Token no configurado'}
 
@@ -485,17 +500,17 @@ class MotorBusqueda:
                 "data": {
                     "selected_offers": [offer_id],
                     "passengers": pasajeros_data,
-                    "type": type
+                    "type": order_type
                 }
             }
             
             if services:
                 payload["data"]["services"] = services
                 
-            if payments and type == 'instant':
+            if payments and order_type == 'instant':
                 payload["data"]["payments"] = payments
 
-            logger.info(f"📤 Creando Order Duffel (Type: {type}, Services: {len(services) if services else 0})")
+            logger.info(f"📤 Creando Order Duffel (Type: {order_type}, Services: {len(services) if services else 0})")
             
             url = f"{self.BASE_URL}/air/orders"
             response = requests.post(url, headers=self._get_headers(), json=payload, timeout=30)
@@ -518,20 +533,46 @@ class MotorBusqueda:
 
     def cancelar_orden(self, order_id):
         """
-        Cancela una orden existente.
-        POST /air/orders/:id/actions/cancel
+        Cancela una orden existente usando el flujo correcto de Duffel:
+        PASO 1: POST /air/order_cancellations → crea cancellation quote
+        PASO 2: POST /air/order_cancellations/{id}/actions/confirm → confirma
         """
         if not self.duffel_token: return {'success': False, 'error': 'Token no configurado'}
         
         try:
-            url = f"{self.BASE_URL}/air/orders/{order_id}/actions/cancel"
-            # Cuerpo vacío o con metadata si fuera necesario
-            response = requests.post(url, headers=self._get_headers(), json={"data":{}}) 
+            # PASO 1: Crear order cancellation (quote)
+            url_create = f"{self.BASE_URL}/air/order_cancellations"
+            payload = {"data": {"order_id": order_id}}
+            response = requests.post(url_create, headers=self._get_headers(), json=payload, timeout=15)
             
-            if response.status_code == 200: # O 201? Docs dicen retorna Resource Order
-                return {'success': True, 'data': response.json()['data']}
+            if response.status_code != 201:
+                error_msg = response.text
+                logger.error(f"❌ Error creando order_cancellation: {error_msg}")
+                return {'success': False, 'error': error_msg}
+            
+            cancellation_data = response.json()['data']
+            cancellation_id = cancellation_data['id']
+            refund_amount = cancellation_data.get('refund_amount', '0')
+            refund_currency = cancellation_data.get('refund_currency', 'EUR')
+            
+            logger.info(f"📋 Cancellation quote creada: {cancellation_id} (reembolso: {refund_amount} {refund_currency})")
+            
+            # PASO 2: Confirmar la cancelación
+            url_confirm = f"{self.BASE_URL}/air/order_cancellations/{cancellation_id}/actions/confirm"
+            response_confirm = requests.post(url_confirm, headers=self._get_headers(), timeout=15)
+            
+            if response_confirm.status_code == 200:
+                confirmed_data = response_confirm.json()['data']
+                logger.info(f"✅ Orden {order_id} cancelada exitosamente")
+                return {
+                    'success': True, 
+                    'data': confirmed_data,
+                    'refund_amount': refund_amount,
+                    'refund_currency': refund_currency
+                }
             else:
-                return {'success': False, 'error': response.text}
+                logger.error(f"❌ Error confirmando cancelación: {response_confirm.text}")
+                return {'success': False, 'error': response_confirm.text}
         
         except Exception as e:
             logger.error(f"❌ Exception Cancelling Order: {e}")
@@ -542,34 +583,18 @@ class MotorBusqueda:
     # ==========================================
     def get_offer_details(self, offer_id):
         """Obtiene detalles + servicios disponibles (Maletas)"""
-        try:
-            url = f"{self.BASE_URL}/air/offers/{offer_id}?return_available_services=true"
-            response = requests.get(url, headers=self._get_headers(), timeout=10)
-            
-            if response.status_code == 200:
-                return response.json()['data']
-            else:
-                logger.error(f"❌ Error Offer Details: {response.text}")
-                return None
-        except Exception as e:
-            logger.error(f"❌ Excepción Offer Details: {e}")
-            return None
+        return self._duffel_get(
+            f"{self.BASE_URL}/air/offers/{offer_id}?return_available_services=true",
+            label="Offer Details"
+        )
 
     def get_seat_maps(self, offer_id):
         """Obtiene mapas de asientos"""
-        try:
-            url = f"{self.BASE_URL}/air/seat_maps"
-            params = {'offer_id': offer_id}
-            response = requests.get(url, headers=self._get_headers(), params=params, timeout=10)
-            
-            if response.status_code == 200:
-                return response.json()['data']
-            else:
-                logger.error(f"❌ Error Seat Maps: {response.text}")
-                return None
-        except Exception as e:
-            logger.error(f"❌ Excepción Seat Maps: {e}")
-            return None
+        return self._duffel_get(
+            f"{self.BASE_URL}/air/seat_maps",
+            params={'offer_id': offer_id},
+            label="Seat Maps"
+        )
 
     # ==========================================
     # 5. PAGOS (DUFFEL PAYMENTS)
@@ -598,24 +623,24 @@ class MotorBusqueda:
         except Exception as e:
             return {'success': False, 'error': str(e)}
 
-    def confirmar_payment_intent(self, payment_intent_id, card_id):
+    def confirmar_payment_intent(self, payment_intent_id):
+        """
+        Confirma un Payment Intent en Duffel.
+        POST /payments/payment_intents/{id}/actions/confirm
+        No requiere body — la confirmación se hace automáticamente cuando
+        el frontend tokeniza la tarjeta vía Duffel Components SDK.
+        """
         try:
-            url = f"{self.BASE_URL}/payments/payment_intents/{payment_intent_id}/confirm"
-            payload = {
-                "data": {
-                    "payment_method": {
-                        "id": card_id,
-                        "object": "payment_method"
-                    }
-                }
-            }
-            response = requests.post(url, headers=self._get_headers(), json=payload, timeout=20)
+            url = f"{self.BASE_URL}/payments/payment_intents/{payment_intent_id}/actions/confirm"
+            response = requests.post(url, headers=self._get_headers(), timeout=20)
             
             if response.status_code == 200:
                 return {'success': True, 'data': response.json()['data']}
             else:
+                logger.error(f"❌ Error confirmando Payment Intent {payment_intent_id}: {response.text}")
                 return {'success': False, 'error': response.text}
         except Exception as e:
+            logger.error(f"❌ Excepción confirmando Payment Intent: {e}")
             return {'success': False, 'error': str(e)}
 
     def crear_client_component_key(self):
@@ -676,7 +701,7 @@ class MotorBusqueda:
             if h: res.append(f"{h}h")
             if m: res.append(f"{m}m")
             return " ".join(res)
-        except:
+        except (ValueError, IndexError, Exception):
             return iso_duration
     def actualizar_datos_pasajero(self, passenger_id, identity_data):
         """
@@ -694,33 +719,20 @@ class MotorBusqueda:
             return {'success': False, 'error': str(e)}
     def get_order_details(self, order_id):
         """Obtiene detalles de una orden existente."""
-        try:
-            url = f"{self.BASE_URL}/air/orders/{order_id}"
-            response = requests.get(url, headers=self._get_headers(), timeout=10)
-            if response.status_code == 200:
-                return response.json()['data']
-            return None
-        except Exception as e:
-            logger.error(f"Error getting order details: {e}")
-            return None
+        return self._duffel_get(
+            f"{self.BASE_URL}/air/orders/{order_id}",
+            label="Order Details"
+        )
 
     def get_order_available_services(self, order_id):
         """Obtiene servicios disponibles (maletas) para una orden ya pagada."""
-        try:
-            url = f"{self.BASE_URL}/air/orders/{order_id}/available_services"
-            response = requests.get(url, headers=self._get_headers(), timeout=10)
-            if response.status_code == 200:
-                return response.json()['data']
-            return []
-        except Exception as e:
-            logger.error(f"Error getting available services for order: {e}")
-            return []
+        return self._duffel_get(
+            f"{self.BASE_URL}/air/orders/{order_id}/available_services",
+            default=[], label="Order Available Services"
+        )
 
     def crear_service_order(self, order_id, service_id, amount, currency):
-        """
-        Añade un servicio extra a una orden existente.
-        Requiere pago.
-        """
+        """Añade un servicio extra a una orden existente. Requiere pago."""
         try:
             url = f"{self.BASE_URL}/air/service_orders"
             payload = {
@@ -745,16 +757,11 @@ class MotorBusqueda:
 
     def get_order_seat_maps(self, order_id):
         """Obtiene mapas de asientos para una orden existente."""
-        try:
-            url = f"{self.BASE_URL}/air/seat_maps"
-            params = {'order_id': order_id}
-            response = requests.get(url, headers=self._get_headers(), params=params, timeout=10)
-            if response.status_code == 200:
-                return response.json()['data']
-            return []
-        except Exception as e:
-            logger.error(f"Error Getting Seat Maps for order: {e}")
-            return []
+        return self._duffel_get(
+            f"{self.BASE_URL}/air/seat_maps",
+            params={'order_id': order_id},
+            default=[], label="Order Seat Maps"
+        )
     def buscar_vuelos_multi(self, slices, adultos=1, ninos=0, bebes=0, clase='economy'):
         """
         Realiza una búsqueda MULTI-CITY en Duffel.
@@ -763,22 +770,11 @@ class MotorBusqueda:
         if not self.duffel_token:
             return []
 
-        passengers = [{"type": "adult"} for _ in range(adultos)]
-        passengers.extend([{"type": "child"} for _ in range(ninos)])
-        passengers.extend([{"type": "infant_without_seat"} for _ in range(bebes)])
-
-        clase_map = {
-            'economy': 'economy',
-            'premium': 'premium_economy', 
-            'business': 'business',
-            'first': 'first'
-        }
-
         payload = {
             "data": {
                 "slices": slices,
-                "passengers": passengers,
-                "cabin_class": clase_map.get(clase, 'economy')
+                "passengers": self._build_passengers(adultos, ninos, bebes),
+                "cabin_class": self.CLASE_MAP.get(clase, 'economy')
             }
         }
 

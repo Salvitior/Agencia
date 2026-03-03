@@ -1,13 +1,16 @@
 import os
 import hashlib
+import logging
 import base64
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.backends import default_backend
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 class SecurityManager:
     _instance = None
@@ -22,31 +25,42 @@ class SecurityManager:
         raw_key = os.getenv("ENCRYPTION_KEY")
         if not raw_key:
             # Fallback only for non-critical paths or dev
-            print("⚠️ WARNING: ENCRYPTION_KEY not found in .env. Encryption will fail.")
+            logger.warning("⚠️ WARNING: ENCRYPTION_KEY not found in .env. Encryption will fail.")
             self.direct_cipher = None
             self.derived_cipher = None
             return
 
         # 1. Direct Fernet (Standard for App & New Credentials)
+        #    Accept either a valid Fernet key (44-char base64url) or any raw string
+        #    (hex, passphrase, etc.) — in the latter case, derive a proper key via SHA-256.
         try:
-             self.direct_cipher = Fernet(raw_key.encode())
-        except Exception as e:
-             print(f"⚠️ Direct Key Init Failed: {e}")
-             self.direct_cipher = None
+            self.direct_cipher = Fernet(raw_key.encode())
+            logger.info("✅ Direct Fernet key loaded from ENCRYPTION_KEY")
+        except Exception:
+            # Raw key isn't valid base64url Fernet — derive one deterministically
+            try:
+                key_bytes = hashlib.sha256(raw_key.encode()).digest()
+                fernet_key = base64.urlsafe_b64encode(key_bytes)
+                self.direct_cipher = Fernet(fernet_key)
+                logger.info("✅ Fernet key derived from ENCRYPTION_KEY via SHA-256")
+            except Exception as e:
+                logger.error(f"❌ Direct Key Init Failed even after derivation: {e}")
+                self.direct_cipher = None
 
         # 2. Derived Key (Legacy/Scraper Compatibility)
         try:
+            derived_salt = os.getenv("DERIVED_KEY_SALT", "").encode() or b'fallback_salt_change_me'
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
-                salt=b'agencia_viajes_salt_2024',
+                salt=derived_salt,
                 iterations=100000,
                 backend=default_backend()
             )
             derived_key = base64.urlsafe_b64encode(kdf.derive(raw_key.encode()))
             self.derived_cipher = Fernet(derived_key)
         except Exception as e:
-             print(f"⚠️ Derived Key Init Failed: {e}")
+             logger.warning(f"⚠️ Derived Key Init Failed: {e}")
              self.derived_cipher = None
 
     def encrypt(self, text):
@@ -68,19 +82,21 @@ class SecurityManager:
         if self.direct_cipher:
             try:
                 return self.direct_cipher.decrypt(data).decode()
-            except:
-                pass 
+            except InvalidToken:
+                logger.debug("Direct decryption failed, trying derived key")
+            except Exception as e:
+                logger.warning(f"⚠️ Unexpected error in direct decryption: {e}")
 
         # Strategy 2: Derived (Legacy Scrapers)
         if self.derived_cipher:
             try:
                 return self.derived_cipher.decrypt(data).decode()
-            except:
-                pass
+            except InvalidToken:
+                logger.debug("Derived decryption also failed")
+            except Exception as e:
+                logger.warning(f"⚠️ Unexpected error in derived decryption: {e}")
         
-        # Strategy 3: Maybe it was Double Encoded? (Edge Case)
-        # (Some legacy systems might double encrypt or base64 wrap)
-        
+        logger.error("❌ All decryption strategies failed")
         return "[Error Decrypt]"
 
 # Singleton Access
@@ -97,5 +113,7 @@ def descifrar(dato_cifrado):
 def generar_hash_dni(dni):
     """Crea un hash irreversible para búsquedas rápidas (Blind Index)."""
     if not dni: return None
-    salt = "COSMIN_SECRET_2026"
+    salt = os.getenv("DNI_HASH_SALT", "")
+    if not salt:
+        logger.warning("⚠️ DNI_HASH_SALT not set in .env — using empty salt (insecure)")
     return hashlib.sha256((dni + salt).encode()).hexdigest()

@@ -1,9 +1,10 @@
 """
 Blueprints package
+
+Actualmente solo se mantiene tours.py para compatibilidad y evolución
+modular futura. Las rutas de vuelos/pagos viven en app.py.
 """
 
-from .flights import init_flights_blueprint
 from .tours import init_tours_blueprint
-from .payments import init_payments_blueprint
 
-__all__ = ['init_flights_blueprint', 'init_tours_blueprint', 'init_payments_blueprint']
+__all__ = ['init_tours_blueprint']

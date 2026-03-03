@@ -7771,3 +7771,114 @@ input:checked+.slider:before {
         transform: translateY(0);
     }
 }
+
+/* ========================================
+   PATCH UX: RESPONSIVE GLOBAL + CONTACTO
+   ======================================== */
+
+@media (max-width: 900px) {
+    .main-header {
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 10px 4%;
+    }
+
+    .logo-premium {
+        height: 56px;
+    }
+
+    .nav-menu {
+        order: 3;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .nav-menu ul {
+        width: max-content;
+        min-width: 100%;
+        gap: 16px;
+        padding-bottom: 6px;
+        white-space: nowrap;
+    }
+
+    .btn-presupuesto {
+        margin-left: auto;
+        padding: 10px 14px;
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 640px) {
+    .main-header {
+        position: sticky;
+        top: 0;
+    }
+
+    .btn-presupuesto {
+        width: 100%;
+        text-align: center;
+        margin-top: 6px;
+    }
+
+    .hero-title,
+    .masked-title,
+    .faq-main-title,
+    .page-title {
+        font-size: clamp(1.6rem, 7vw, 2.2rem) !important;
+        line-height: 1.2;
+    }
+}
+
+.page-contacto {
+    background: #f3f6fb;
+}
+
+.page-contacto .contact-wrapper {
+    padding: 40px 0;
+}
+
+.page-contacto .contact-flex-layout {
+    border-radius: 16px;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.page-contacto .boutique-info {
+    background: #0f172a;
+    color: #ffffff;
+}
+
+.page-contacto .briefing-form-container {
+    background: #ffffff;
+}
+
+.page-contacto .form-title h2,
+.page-contacto .floating-group input,
+.page-contacto .floating-group textarea,
+.page-contacto .floating-group input::placeholder,
+.page-contacto .floating-group textarea::placeholder {
+    color: #0f172a;
+}
+
+.page-contacto .floating-group label,
+.page-contacto .form-title p {
+    color: #64748b;
+}
+
+.page-contacto .btn-send-briefing {
+    background: #0f172a;
+    color: #ffffff;
+}
+
+@media (max-width: 900px) {
+    .page-contacto .contact-flex-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    .page-contacto .boutique-info,
+    .page-contacto .briefing-form-container {
+        padding: 28px;
+    }
+}

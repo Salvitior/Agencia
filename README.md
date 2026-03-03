@@ -5,7 +5,7 @@ A full-stack Flask-based travel booking platform integrating Duffel Flights API,
 ## Features
 
 - **Flight Search & Booking**: Real-time search via Duffel API and Amadeus
-- **Payment Processing**: Duffel Payments (with manual fallback) and Stripe integration
+- **Payment Processing**: Stripe checkout + emisión de reservas con Duffel Balance
 - **Tour Management**: Dynamic tour packages with customizable itineraries
 - **Admin Panel**: Comprehensive dashboard for bookings, reservations, and analytics
 - **User Authentication**: Secure login and session management
@@ -17,7 +17,7 @@ A full-stack Flask-based travel booking platform integrating Duffel Flights API,
 
 - **Backend**: Flask 2.x, SQLAlchemy, PostgreSQL
 - **Frontend**: HTML5, CSS3, Vanilla JavaScript, Flatpickr
-- **Payment**: Duffel Payments, Stripe
+- **Payment**: Stripe, Duffel Balance
 - **APIs**: Duffel Flights, Amadeus, EmailManager
 - **Deployment**: Docker Compose, Gunicorn, Nginx
 - **Monitoring**: Prometheus, Rotating File Logs
@@ -27,7 +27,7 @@ A full-stack Flask-based travel booking platform integrating Duffel Flights API,
 - Python 3.10+
 - PostgreSQL 12+
 - Redis (optional, for caching)
-- Docker & Docker Compose (for containerized deployment)
+- Docker & Docker Compose plugin (for containerized deployment)
 
 ## Installation
 
@@ -71,14 +71,15 @@ Visit `http://localhost:8000` in your browser.
 ## Docker Deployment
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 This starts:
-- Flask application on port 8000
 - PostgreSQL database on port 5433
-- Nginx reverse proxy on port 80
 - Redis cache (optional)
+- Prometheus on port 9090
+- Grafana on port 3000
+- PgAdmin on port 5050
 
 ## Project Structure
 
@@ -92,9 +93,7 @@ This starts:
 │   ├── schemas.py         # Request validation
 │   └── decorators.py      # Authentication decorators
 │
-├── blueprints/            # Flask blueprints (modular routes)
-│   ├── flights.py
-│   ├── payments.py
+├── blueprints/            # Flask blueprints auxiliares
 │   └── tours.py
 │
 ├── core/                  # Business logic & utilities
@@ -132,9 +131,8 @@ This starts:
 - `GET /api/vuelos/<id>` - Get flight details
 
 ### Payments
-- `POST /api/vuelos/payment-intent` - Initialize payment
-- `POST /api/vuelos/confirmar-pago` - Confirm payment
-- `POST /api/vuelos/client-component-key` - Get Duffel component key
+- `POST /api/vuelos/create-checkout-session` - Crear sesión Stripe Checkout
+- `POST /webhook/stripe` - Confirmación de pago Stripe y emisión Duffel balance
 
 ### Orders
 - `GET /api/orders` - List user orders
@@ -146,8 +144,7 @@ This starts:
 - `POST /admin/reservas/<id>/update` - Update reservation
 
 ### Webhooks
-- `POST /webhooks/stripe` - Stripe payment events
-- `POST /webhooks/duffel` - Duffel order updates
+- `POST /webhook/stripe` - Stripe payment events
 
 ## Configuration
 
@@ -200,7 +197,7 @@ Access Prometheus metrics:
 
 View logs:
 ```bash
-tail -f app.log
+tail -f /tmp/agencia_app.log
 ```
 
 ## Common Issues
@@ -208,12 +205,12 @@ tail -f app.log
 ### Database Connection Error
 - Verify PostgreSQL is running
 - Check DB credentials in `.env`
-- Ensure database exists: `createdb agencia_db`
+- Ensure containers are up: `docker compose ps`
 
-### Duffel Payment Unavailable
-- The system automatically falls back to manual payment
-- Admin can manually process payment for users
-- Check API token validity
+### Duffel Balance Insuficiente
+- El pago Stripe puede quedar completado y la emisión en espera
+- Usa el panel/admin de reintento de emisión cuando recargues balance
+- Verifica token Duffel y saldo disponible
 
 ### Email Sending Fails
 - Verify email service credentials in `.env`
@@ -250,7 +247,7 @@ Proprietary - Viatges Carcaixent
 ## Support
 
 For issues or questions:
-1. Check app logs: `tail -f app.log`
+1. Check app logs: `tail -f /tmp/agencia_app.log`
 2. Review API responses in browser console
 3. Contact development team
 

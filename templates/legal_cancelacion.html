@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='imagenes/logosintexto.png') }}">
+    <title>{{ meta.title }}</title>
+    <meta name="description" content="{{ meta.description }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style/style.css') }}">
+    <style>
+        .legal-container { max-width: 800px; margin: 40px auto; padding: 40px; background: #fff; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+        .legal-container h1 { font-size: 1.8rem; color: #1a1a2e; margin-bottom: 8px; }
+        .legal-container h2 { font-size: 1.3rem; color: #333; margin-top: 32px; margin-bottom: 12px; }
+        .legal-container h3 { font-size: 1.05rem; color: #444; margin-top: 20px; }
+        .legal-container p, .legal-container li { color: #555; line-height: 1.7; font-size: 0.95rem; }
+        .legal-container ul { padding-left: 20px; }
+        .legal-container li { margin-bottom: 8px; }
+        .legal-date { color: #999; font-size: 0.85rem; margin-bottom: 32px; }
+        .legal-nav { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1px solid #eee; }
+        .legal-nav a { color: #e67e22; text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+        .highlight-box { background: #fff3e6; border-left: 4px solid #e67e22; padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 20px 0; }
+    </style>
+</head>
+<body style="background: #f5f6fa;">
+    <header class="main-header" id="top">
+        <div class="logo-container">
+            <a href="{{ url_for('home') }}"><img src="{{ url_for('static', filename='imagenes/logo.png') }}" alt="Viatges Carcaixent" class="logo-premium"></a>
+        </div>
+    </header>
+
+    <div class="legal-container">
+        <div class="legal-nav">
+            <a href="{{ url_for('seo.politica_privacidad') }}">Privacidad</a>
+            <a href="{{ url_for('seo.politica_cookies') }}">Cookies</a>
+            <a href="{{ url_for('seo.condiciones_compra') }}">Condiciones de Compra</a>
+            <a href="{{ url_for('seo.politica_cancelacion') }}">Cancelaciones</a>
+            <a href="{{ url_for('seo.aviso_legal') }}">Aviso Legal</a>
+        </div>
+
+        <h1>Política de Cancelación y Reembolsos</h1>
+        <p class="legal-date">Última actualización: enero 2025</p>
+
+        <div class="highlight-box">
+            <strong>Importante:</strong> Las condiciones de cancelación dependen de la tarifa contratada y la política de cada aerolínea u operador. A continuación se detallan las condiciones generales.
+        </div>
+
+        <h2>1. Cancelación de Vuelos</h2>
+
+        <h3>Tarifas flexibles</h3>
+        <ul>
+            <li>Cancelación gratuita hasta 24 horas antes de la salida.</li>
+            <li>Reembolso del 100% del precio del billete (excluyendo gastos de gestión de la agencia de 15€).</li>
+        </ul>
+
+        <h3>Tarifas estándar</h3>
+        <ul>
+            <li>Cancelación con más de 7 días de antelación: reembolso del 80% (se retienen tasas de aerolínea + gastos de gestión).</li>
+            <li>Cancelación entre 7 y 2 días antes: reembolso del 50%.</li>
+            <li>Cancelación con menos de 48 horas: sin reembolso (salvo causas de fuerza mayor).</li>
+        </ul>
+
+        <h3>Tarifas no reembolsables</h3>
+        <ul>
+            <li>No admiten cancelación ni reembolso.</li>
+            <li>Solo se reembolsan las tasas aeroportuarias no devengadas.</li>
+        </ul>
+
+        <h2>2. Cambio de Nombre</h2>
+        <ul>
+            <li>Corrección de nombre (erratas): gratuito si se solicita en las primeras 24 horas.</li>
+            <li>Cambio de titular: sujeto a la política de la aerolínea (generalmente entre 30€ y 150€ + diferencia de tarifa).</li>
+        </ul>
+
+        <h2>3. Cancelación de Tours</h2>
+        <ul>
+            <li>Más de 30 días antes: reembolso del 90%.</li>
+            <li>Entre 15 y 30 días: reembolso del 75%.</li>
+            <li>Entre 7 y 15 días: reembolso del 50%.</li>
+            <li>Menos de 7 días: sin reembolso.</li>
+        </ul>
+
+        <h2>4. Seguro de Cancelación</h2>
+        <p>Recomendamos contratar el <strong>Seguro de Viaje</strong> disponible durante la reserva, que incluye cobertura de cancelación por enfermedad, accidente, o causas de fuerza mayor.</p>
+        <ul>
+            <li><strong>Básico (19,90€):</strong> Cobertura de cancelación hasta 1.000€.</li>
+            <li><strong>Estándar (34,90€):</strong> Cobertura de cancelación hasta 3.000€ + asistencia médica.</li>
+            <li><strong>Premium (59,90€):</strong> Cobertura total sin límite + equipaje extraviado + retraso de vuelo.</li>
+        </ul>
+
+        <h2>5. Cancelación por la Aerolínea</h2>
+        <p>Si la aerolínea cancela el vuelo, tienes derecho a:</p>
+        <ul>
+            <li>Reembolso completo del billete.</li>
+            <li>Vuelo alternativo en condiciones similares.</li>
+            <li>Compensación según el Reglamento (CE) nº 261/2004 (entre 250€ y 600€ según distancia).</li>
+        </ul>
+
+        <h2>6. Proceso de Solicitud de Reembolso</h2>
+        <ol>
+            <li>Accede a tu <a href="{{ url_for('clientes.login') }}">área de cliente</a>.</li>
+            <li>Selecciona la reserva que deseas cancelar.</li>
+            <li>Haz clic en "Solicitar reembolso" e indica el motivo.</li>
+            <li>Recibirás confirmación por email en un máximo de 48 horas.</li>
+            <li>El reembolso se procesará en 7-14 días hábiles en el mismo método de pago utilizado.</li>
+        </ol>
+
+        <h2>7. Contacto</h2>
+        <p>Para cualquier consulta sobre cancelaciones o reembolsos, contacta con nosotros en <strong>info@viatgescarcaixent.com</strong> o a través del <a href="{{ url_for('contacto') }}">formulario de contacto</a>.</p>
+    </div>
+</body>
+</html>

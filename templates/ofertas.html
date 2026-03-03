@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
     <link rel="stylesheet" href="{{ url_for('static', filename='style/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style/tours-catalog.css') }}">
 </head>
 
 <body>
@@ -83,6 +84,75 @@
         <div class="side-scroll-info">
             <span>SCROLL PARA EXPLORAR</span>
             <div class="line"></div>
+        </div>
+    </section>
+
+    <section class="catalogo-tours-container" id="catalogo-ofertas">
+        <div class="catalogo-layout">
+            <aside class="filtros-sidebar">
+                <div class="filtros-header">
+                    <h3>🔥 Filtrar Ofertas</h3>
+                    <button onclick="resetearFiltros()" class="btn-reset-filtros">Limpiar</button>
+                </div>
+
+                <div class="filtro-grupo">
+                    <label>Buscar</label>
+                    <input type="text" id="search-tours" placeholder="Escapadas, último minuto..." class="input-search-tours">
+                </div>
+
+                <div class="filtro-grupo">
+                    <label for="precio-slider">Precio Máximo: <span id="precio-display">{{ filtros.precio_max }}</span>€</label>
+                    <input type="range" id="precio-slider" min="0" max="{{ filtros.precio_max }}" value="{{ filtros.precio_max }}" step="50" class="slider-precio">
+                </div>
+
+                <div class="filtro-grupo">
+                    <label>Duración</label>
+                    <div class="filtro-opciones-radio">
+                        <label for="of-dur-short"><input type="radio" id="of-dur-short" name="duracion" value="1-7"><span>1-7 días</span></label>
+                        <label for="of-dur-medium"><input type="radio" id="of-dur-medium" name="duracion" value="8-14"><span>8-14 días</span></label>
+                        <label for="of-dur-long"><input type="radio" id="of-dur-long" name="duracion" value="15-999"><span>15+ días</span></label>
+                    </div>
+                </div>
+
+                <div class="filtro-grupo">
+                    <label>Continente</label>
+                    <div class="filtro-opciones">
+                        {% for continente in filtros.continentes %}
+                        <label class="filtro-checkbox-label" for="filtro-of-cont-{{ loop.index }}">
+                            <input type="checkbox" id="filtro-of-cont-{{ loop.index }}" class="filtro-continente" value="{{ continente.nombre }}">
+                            <span>{{ continente.nombre }}</span>
+                            <span class="count">({{ continente.count }})</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </aside>
+
+            <main class="catalogo-main-area">
+                <div class="results-toolbar">
+                    <div class="results-info">
+                        <h2>Ofertas Activas</h2>
+                        <p id="results-count">Cargando ofertas...</p>
+                    </div>
+                    <div class="sort-controls">
+                        <label>Ordenar por:</label>
+                        <select id="sort-tours" class="select-sort">
+                            <option value="precio-asc">Precio: Menor a Mayor</option>
+                            <option value="relevancia">Relevancia</option>
+                            <option value="duracion-asc">Duración: Corta a Larga</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="tours-container" class="tours-grid">
+                    <div class="loading-spinner">
+                        <div class="spinner"></div>
+                        <p>Cargando ofertas...</p>
+                    </div>
+                </div>
+
+                <div id="pagination-container" class="pagination"></div>
+            </main>
         </div>
     </section>
 
@@ -363,11 +433,19 @@
         </div>
     </footer>
 
+    <script>
+        window.TOURS_CATALOG_PRESET = {
+            sort: 'precio-asc',
+            precio_max: 1200
+        };
+    </script>
+    <script src="{{ url_for('static', filename='js/tours-catalog.js') }}"></script>
+
 
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
     <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
-    <script src="{{ url_for('static', filename='style/script.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 
 </body>
 

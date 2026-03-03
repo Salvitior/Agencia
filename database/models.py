@@ -3,8 +3,7 @@ Modelos de base de datos para el sistema de agencia de viajes
 """
 
 from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, Date, ForeignKey, Index
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
 from flask_login import UserMixin
 
@@ -219,6 +218,19 @@ class Pedido(Base):
     # Relaciones
     usuario = relationship('Usuario', back_populates='pedidos')
     
+    def to_dict(self):
+        """Serializa el pedido a diccionario"""
+        return {
+            'id': self.id,
+            'usuario_id': self.usuario_id,
+            'tour_id': self.tour_id,
+            'num_personas': self.num_personas,
+            'precio_total': self.precio_total,
+            'estado': self.estado,
+            'fecha_pedido': self.fecha_pedido.isoformat() if self.fecha_pedido else None,
+            'stripe_session_id': self.stripe_session_id,
+        }
+
     def __repr__(self):
         return f"<Pedido {self.id}: €{self.precio_total} - {self.estado}>"
 
@@ -406,29 +418,73 @@ class ReservaVuelo(Base):
     stripe_payment_intent_id = Column(String(255), index=True)
     stripe_session_id = Column(String(255))
     
+    # Duffel Payments (separado de Stripe)
+    duffel_payment_intent_id = Column(String(255), index=True)
+    
     # Estado
     estado = Column(String(50), default='PENDIENTE', index=True)
     # PENDIENTE -> PAGADO -> CONFIRMADO -> EMITIDO -> ERROR
     
     # Contacto
+    nombre_cliente = Column(String(255))  # Nombre completo del titular
     email_cliente = Column(String(255), nullable=False, index=True)
     telefono_cliente = Column(String(50))
+    
+    # Datos de vuelo extraídos (queryable)
+    booking_reference = Column(String(100), index=True)  # Ref de booking (antes en notas)
+    numero_vuelo = Column(String(50), index=True)  # Nº vuelo principal (ej: IB3216)
+    fecha_vuelo_ida = Column(Date, index=True)  # Para queries de check-in 24h
+    moneda = Column(String(3), default='EUR')  # ISO 4217
+    
+    # Check-in
+    checkin_recordatorio_enviado = Column(Boolean, default=False)
     
     # Metadatos
     es_viaje_redondo = Column(Boolean, default=False)
     notas = Column(Text)
     error_mensaje = Column(Text)  # Si hay error en booking
     
-    # ✅ NUEVO: Información de emisión
-    ticket_numbers = Column(Text)  # JSON array: ["0011234567890", "0011234567891", ...]
+    # Información de emisión
+    ticket_numbers = Column(Text)  # JSON array: ["0011234567890", ...]
     amenities_added = Column(Text)  # JSON: [{"type": "SEAT", "value": "12A"}, ...]
     
     # Fechas
     fecha_creacion = Column(DateTime, default=datetime.utcnow, index=True)
     fecha_pago = Column(DateTime)
     fecha_confirmacion = Column(DateTime)
-    fecha_orden_creada = Column(DateTime)  # ✅ NUEVO: Cuándo se creó la orden
-    fecha_emision = Column(DateTime)  # Cuándo se emitieron los tickets
+    fecha_orden_creada = Column(DateTime)
+    fecha_emision = Column(DateTime)
+
+    def to_dict(self):
+        """Serializa la reserva a diccionario"""
+        import json as _json
+        datos = {}
+        try:
+            datos = _json.loads(self.datos_vuelo) if self.datos_vuelo else {}
+        except (ValueError, TypeError):
+            pass
+        return {
+            'id': self.id,
+            'codigo_reserva': self.codigo_reserva,
+            'provider': self.provider,
+            'estado': self.estado,
+            'nombre_cliente': self.nombre_cliente,
+            'email_cliente': self.email_cliente,
+            'telefono_cliente': self.telefono_cliente,
+            'precio_vuelos': self.precio_vuelos,
+            'precio_extras': self.precio_extras,
+            'precio_total': self.precio_total,
+            'moneda': self.moneda or 'EUR',
+            'booking_reference': self.booking_reference,
+            'numero_vuelo': self.numero_vuelo,
+            'fecha_vuelo_ida': str(self.fecha_vuelo_ida) if self.fecha_vuelo_ida else None,
+            'es_viaje_redondo': self.es_viaje_redondo,
+            'datos_vuelo': datos,
+            'fecha_creacion': self.fecha_creacion.isoformat() if self.fecha_creacion else None,
+            'fecha_pago': self.fecha_pago.isoformat() if self.fecha_pago else None,
+            'fecha_confirmacion': self.fecha_confirmacion.isoformat() if self.fecha_confirmacion else None,
+            'fecha_emision': self.fecha_emision.isoformat() if self.fecha_emision else None,
+        }
 
     def __repr__(self):
         return f"<ReservaVuelo {self.codigo_reserva} - {self.estado} ({self.provider})>"

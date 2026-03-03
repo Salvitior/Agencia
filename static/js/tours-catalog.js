@@ -42,12 +42,24 @@ function debounce(func, wait) {
 function initCatalogo() {
     console.log('🚀 Inicializando catálogo de tours...');
 
+    // Presets por página (ej: cruceros/ofertas)
+    const preset = window.TOURS_CATALOG_PRESET || {};
+    if (preset.search) catalogState.filters.search = String(preset.search);
+    if (preset.sort) catalogState.sort = String(preset.sort);
+    if (preset.precio_max) {
+        const parsedPrecio = parseInt(preset.precio_max, 10);
+        if (!Number.isNaN(parsedPrecio) && parsedPrecio > 0) {
+            catalogState.filters.precio_max = parsedPrecio;
+        }
+    }
+
     // Configurar event listeners de filtros
     setupFiltros();
 
     // Configurar búsqueda con debounce
     const searchInput = document.getElementById('search-tours');
     if (searchInput) {
+        searchInput.value = catalogState.filters.search || '';
         searchInput.addEventListener('input', debounce(function (e) {
             catalogState.filters.search = e.target.value;
             catalogState.currentPage = 1; // Reset a página 1
@@ -58,6 +70,7 @@ function initCatalogo() {
     // Configurar ordenamiento
     const sortSelect = document.getElementById('sort-tours');
     if (sortSelect) {
+        if (catalogState.sort) sortSelect.value = catalogState.sort;
         sortSelect.addEventListener('change', function (e) {
             catalogState.sort = e.target.value;
             catalogState.currentPage = 1;
@@ -68,6 +81,14 @@ function initCatalogo() {
     // Configurar slider de precio
     const precioSlider = document.getElementById('precio-slider');
     if (precioSlider) {
+        const maxFromDom = parseInt(precioSlider.max, 10) || catalogState.filters.precio_max || 5000;
+        if (catalogState.filters.precio_max > maxFromDom) {
+            catalogState.filters.precio_max = maxFromDom;
+        }
+        precioSlider.value = catalogState.filters.precio_max;
+        const precioDisplay = document.getElementById('precio-display');
+        if (precioDisplay) precioDisplay.textContent = String(catalogState.filters.precio_max);
+
         precioSlider.addEventListener('input', debounce(function (e) {
             catalogState.filters.precio_max = parseInt(e.target.value);
             document.getElementById('precio-display').textContent = e.target.value;
@@ -313,13 +334,16 @@ function cambiarPagina(page) {
  * Resetear todos los filtros
  */
 function resetearFiltros() {
+    const precioSlider = document.getElementById('precio-slider');
+    const maxPriceFromDom = precioSlider ? (parseInt(precioSlider.max, 10) || 5000) : 5000;
+
     // Limpiar estado
     catalogState.filters = {
         search: '',
         continente: '',
         pais: '',
         proveedor: '',
-        precio_max: 5000,
+        precio_max: maxPriceFromDom,
         duracion_min: 1,
         duracion_max: 30,
         tipo: '',
@@ -337,10 +361,9 @@ function resetearFiltros() {
     const sortSelect = document.getElementById('sort-tours');
     if (sortSelect) sortSelect.value = 'relevancia';
 
-    const precioSlider = document.getElementById('precio-slider');
     if (precioSlider) {
-        precioSlider.value = 5000;
-        document.getElementById('precio-display').textContent = '5000';
+        precioSlider.value = String(maxPriceFromDom);
+        document.getElementById('precio-display').textContent = String(maxPriceFromDom);
     }
 
     // Recargar
@@ -610,7 +633,7 @@ function consultarDisponibilidad(tourId) {
     // Reutilizar la función del cruceros.html si existe
     if (typeof abrirModalReserva === 'function') {
         // Obtener datos del tour desde el DOM o hacer otro fetch
-        fetch(`/ api / tours / ${tourId}/completo`)
+        fetch(`/api/tours/${tourId}/completo`)
             .then(r => r.json())
             .then(tour => {
                 abrirModalReserva(tour.id, tour.titulo, tour.precio_desde);

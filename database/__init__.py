@@ -22,7 +22,23 @@ from .models import (
     Pedido,
     SolicitudTour,
     ReservaVuelo,
-    DuffelSearch
+    DuffelSearch,
+    Cliente,
+    Expediente,
+    Pasajero,
+    Factura
+)
+
+# Nuevos modelos de clientes (área de cliente, auditoría, RGPD)
+from .models_clientes import (
+    ClienteUsuario,
+    PasajeroFrecuente,
+    ReservaCliente,
+    SolicitudReembolso,
+    NotificacionCliente,
+    AuditLog,
+    ConsentimientoCookies,
+    TrackingBusqueda,
 )
 
 __all__ = [
@@ -34,8 +50,9 @@ __all__ = [
     'close_session',
     'test_connection',
     'DATABASE_URL',
-    'get_db_connection',  # ✅ AÑADIDO
-    # Models
+    'get_db_connection',
+    'init_db',
+    # Models - Core
     'Base',
     'Usuario',
     'Tour',
@@ -43,7 +60,20 @@ __all__ = [
     'Pedido',
     'SolicitudTour',
     'ReservaVuelo',
-    'DuffelSearch'
+    'DuffelSearch',
+    'Cliente',
+    'Expediente',
+    'Pasajero',
+    'Factura',
+    # Models - Clientes
+    'ClienteUsuario',
+    'PasajeroFrecuente',
+    'ReservaCliente',
+    'SolicitudReembolso',
+    'NotificacionCliente',
+    'AuditLog',
+    'ConsentimientoCookies',
+    'TrackingBusqueda',
 ]
 
 
@@ -52,6 +82,10 @@ def init_db():
     Inicializa todas las tablas en la base de datos
     """
     print("🔧 Creando tablas en PostgreSQL...")
+    
+    # Importar los modelos nuevos para que Base.metadata los conozca
+    from . import models_clientes  # noqa: F401
+    
     Base.metadata.create_all(engine)
     
     # Verificar tablas creadas

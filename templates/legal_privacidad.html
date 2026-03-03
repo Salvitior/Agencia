@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='imagenes/logosintexto.png') }}">
+    <title>{{ meta.title }}</title>
+    <meta name="description" content="{{ meta.description }}">
+    <link rel="canonical" href="{{ meta.canonical }}">
+    <meta property="og:title" content="{{ meta.og.title }}">
+    <meta property="og:description" content="{{ meta.og.description }}">
+    <meta property="og:type" content="{{ meta.og.type }}">
+    <meta property="og:locale" content="es_ES">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style/style.css') }}">
+    <style>
+        .legal-container { max-width: 800px; margin: 40px auto; padding: 40px; background: #fff; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+        .legal-container h1 { font-size: 1.8rem; color: #1a1a2e; margin-bottom: 8px; }
+        .legal-container h2 { font-size: 1.3rem; color: #333; margin-top: 32px; margin-bottom: 12px; }
+        .legal-container h3 { font-size: 1.1rem; color: #444; margin-top: 24px; }
+        .legal-container p, .legal-container li { color: #555; line-height: 1.7; font-size: 0.95rem; }
+        .legal-container ul { padding-left: 20px; }
+        .legal-container li { margin-bottom: 8px; }
+        .legal-date { color: #999; font-size: 0.85rem; margin-bottom: 32px; }
+        .legal-nav { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 1px solid #eee; }
+        .legal-nav a { color: #e67e22; text-decoration: none; font-weight: 500; font-size: 0.9rem; }
+    </style>
+</head>
+<body style="background: #f5f6fa;">
+    <header class="main-header" id="top">
+        <div class="logo-container">
+            <a href="{{ url_for('home') }}">
+                <img src="{{ url_for('static', filename='imagenes/logo.png') }}" alt="Viatges Carcaixent" class="logo-premium">
+            </a>
+        </div>
+        <nav class="nav-menu">
+            <ul>
+                <li><a href="{{ url_for('home') }}" class="nav-link">Inicio</a></li>
+                <li><a href="{{ url_for('contacto') }}" class="nav-link">Contacto</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <div class="legal-container">
+        <div class="legal-nav">
+            <a href="{{ url_for('seo.politica_privacidad') }}">Privacidad</a>
+            <a href="{{ url_for('seo.politica_cookies') }}">Cookies</a>
+            <a href="{{ url_for('seo.condiciones_compra') }}">Condiciones de Compra</a>
+            <a href="{{ url_for('seo.politica_cancelacion') }}">Cancelaciones</a>
+            <a href="{{ url_for('seo.aviso_legal') }}">Aviso Legal</a>
+        </div>
+
+        <h1>Política de Privacidad</h1>
+        <p class="legal-date">Última actualización: enero 2025</p>
+
+        <h2>1. Responsable del Tratamiento</h2>
+        <p>Viatges Carcaixent (en adelante, "la Agencia") es responsable del tratamiento de los datos personales recogidos a través de este sitio web.</p>
+        <ul>
+            <li><strong>Denominación social:</strong> Viatges Carcaixent</li>
+            <li><strong>Dirección:</strong> Carcaixent, Valencia 46740, España</li>
+            <li><strong>Email de contacto:</strong> info@viatgescarcaixent.com</li>
+        </ul>
+
+        <h2>2. Datos que Recopilamos</h2>
+        <p>Recopilamos los siguientes datos personales:</p>
+        <ul>
+            <li><strong>Datos de identificación:</strong> nombre, apellidos, DNI/NIE/pasaporte, fecha de nacimiento, nacionalidad.</li>
+            <li><strong>Datos de contacto:</strong> email, teléfono.</li>
+            <li><strong>Datos de navegación:</strong> dirección IP, cookies, páginas visitadas.</li>
+            <li><strong>Datos de transacción:</strong> historial de reservas, pagos realizados.</li>
+        </ul>
+
+        <h2>3. Finalidad del Tratamiento</h2>
+        <ul>
+            <li>Gestión de reservas de vuelos, tours y cruceros.</li>
+            <li>Procesamiento de pagos.</li>
+            <li>Emisión de billetes y facturas.</li>
+            <li>Envío de comunicaciones relativas a tus reservas (confirmaciones, recordatorios de check-in, cambios de vuelo).</li>
+            <li>Si has dado tu consentimiento, envío de ofertas y promociones.</li>
+            <li>Cumplimiento de obligaciones legales (normativa de viajes, fiscal).</li>
+        </ul>
+
+        <h2>4. Base Legal del Tratamiento</h2>
+        <ul>
+            <li><strong>Ejecución de contrato:</strong> para gestionar tu reserva y prestarte los servicios solicitados.</li>
+            <li><strong>Consentimiento:</strong> para el envío de comunicaciones comerciales.</li>
+            <li><strong>Interés legítimo:</strong> para la prevención de fraude y mejora del servicio.</li>
+            <li><strong>Obligación legal:</strong> para el cumplimiento de normativa fiscal y de viajes.</li>
+        </ul>
+
+        <h2>5. Destinatarios de los Datos</h2>
+        <p>Tus datos podrán ser comunicados a:</p>
+        <ul>
+            <li><strong>Aerolíneas y proveedores de servicios turísticos:</strong> necesario para gestionar tu reserva.</li>
+            <li><strong>Pasarelas de pago:</strong> Stripe para el procesamiento seguro de pagos (PCI DSS compliant).</li>
+            <li><strong>Administraciones públicas:</strong> cuando sea requerido por ley.</li>
+        </ul>
+
+        <h2>6. Medidas de Seguridad</h2>
+        <p>Implementamos medidas técnicas y organizativas para proteger tus datos:</p>
+        <ul>
+            <li>Cifrado AES-256 para documentos de identidad.</li>
+            <li>Comunicaciones cifradas mediante HTTPS/TLS.</li>
+            <li>Acceso restringido a datos personales.</li>
+            <li>Auditoría de accesos.</li>
+        </ul>
+
+        <h2>7. Tus Derechos (RGPD)</h2>
+        <p>Tienes derecho a:</p>
+        <ul>
+            <li><strong>Acceso:</strong> solicitar una copia de tus datos personales.</li>
+            <li><strong>Rectificación:</strong> corregir datos inexactos.</li>
+            <li><strong>Supresión:</strong> solicitar la eliminación de tus datos.</li>
+            <li><strong>Portabilidad:</strong> recibir tus datos en formato estructurado.</li>
+            <li><strong>Oposición:</strong> oponerte al tratamiento de tus datos.</li>
+            <li><strong>Limitación:</strong> solicitar la limitación del tratamiento.</li>
+        </ul>
+        <p>Para ejercer estos derechos, contacta con nosotros en <strong>info@viatgescarcaixent.com</strong> o desde tu <a href="{{ url_for('clientes.login') }}">área de cliente</a>.</p>
+
+        <h2>8. Conservación de los Datos</h2>
+        <p>Los datos se conservarán durante el tiempo necesario para la prestación del servicio y el cumplimiento de obligaciones legales (mínimo 5 años para datos fiscales).</p>
+
+        <h2>9. Cookies</h2>
+        <p>Consulta nuestra <a href="{{ url_for('seo.politica_cookies') }}">Política de Cookies</a> para más información.</p>
+    </div>
+</body>
+</html>

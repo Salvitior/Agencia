@@ -22,9 +22,9 @@ if ! docker info > /dev/null 2>&1; then
     sleep 3
 fi
 
-# ✅ 3. Iniciar PostgreSQL con Docker (si existe docker-compose)
+# ✅ 3. Iniciar PostgreSQL con Docker (si existe docker-compose.yml)
 if [ -f "docker-compose.yml" ]; then
-    echo "📦 Iniciando PostgreSQL con Docker Compose..."
+    echo "📦 Iniciando PostgreSQL con docker compose..."
     docker compose up -d postgres
     echo "⏳ Esperando a que PostgreSQL esté listo (10s)..."
     sleep 10

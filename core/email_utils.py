@@ -18,8 +18,18 @@ class EmailManager:
         self.smtp_user = os.getenv('SMTP_USER')
         self.smtp_pass = os.getenv('SMTP_PASS')
         self.sender_email = os.getenv('SENDER_EMAIL', self.smtp_user)
+        self.smtp_timeout = int(os.getenv('SMTP_TIMEOUT', '20'))
+        self.smtp_use_ssl = os.getenv('SMTP_USE_SSL', 'false').lower() == 'true'
+
+    @staticmethod
+    def _looks_like_email(value):
+        return isinstance(value, str) and '@' in value and '.' in value.split('@')[-1]
 
     def send_email(self, to_email, subject, body_html):
+        if not self._looks_like_email(to_email):
+            logger.warning(f"⚠️ Invalid recipient email: {to_email}")
+            return False
+
         if not self.smtp_user or not self.smtp_pass:
             logger.warning("⚠️ SMTP credentials not found. Email not sent.")
             return False
@@ -32,11 +42,17 @@ class EmailManager:
 
             msg.attach(MIMEText(body_html, 'html'))
 
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            server.starttls()
-            server.login(self.smtp_user, self.smtp_pass)
-            server.send_message(msg)
-            server.quit()
+            if self.smtp_use_ssl or self.smtp_port == 465:
+                with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, timeout=self.smtp_timeout) as server:
+                    server.login(self.smtp_user, self.smtp_pass)
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=self.smtp_timeout) as server:
+                    server.ehlo()
+                    server.starttls()
+                    server.ehlo()
+                    server.login(self.smtp_user, self.smtp_pass)
+                    server.send_message(msg)
             
             logger.info(f"📧 Email sent to {to_email}: {subject}")
             return True

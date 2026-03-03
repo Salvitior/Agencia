@@ -11,11 +11,8 @@
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- Duffel SDK (Custom Element Version) -->
-    <script type="text/javascript" src="https://assets.duffel.com/components/3.11.0/duffel-card-form.js"></script>
     <!-- Cookie Consent -->
     <script src="/static/js/cookie-consent.js"></script>
-
     <style>
         :root {
             --primary: #0f172a;
@@ -65,7 +62,7 @@
             margin: 40px auto;
             padding: 0 20px;
             display: grid;
-            grid-template-columns: 380px 1fr;
+            grid-template-columns: 340px minmax(550px, 1fr);
             gap: 40px;
             flex: 1;
         }
@@ -213,6 +210,158 @@
             flex-grow: 1;
         }
 
+
+        /* Multi-Step Progress Indicator */
+        .checkout-progress {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            padding: 24px 20px;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .progress-step {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            opacity: 0.45;
+            transition: opacity 0.3s;
+        }
+
+        .progress-step.active,
+        .progress-step.completed {
+            opacity: 1;
+        }
+
+        .progress-step-circle {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--border);
+            color: var(--text-light);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.3s;
+        }
+
+        .progress-step.active .progress-step-circle {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .progress-step-circle.completed {
+            background: var(--success);
+            color: #fff;
+        }
+
+        .progress-step-circle.completed::after {
+            content: '\f00c';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            font-size: 0.85rem;
+        }
+
+        .progress-step-label {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-main);
+        }
+
+        .progress-connector {
+            width: 60px;
+            height: 2px;
+            background: var(--border);
+            margin: 0 16px;
+        }
+
+        /* Multi-Step Content */
+        .checkout-step {
+            display: none;
+        }
+
+        .checkout-step.active {
+            display: block;
+        }
+
+        /* Review Section */
+        .checkout-review-section {
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .review-section-title {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--primary);
+        }
+
+        .review-passenger-card {
+            background: var(--bg-light);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .review-data-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 0.9rem;
+        }
+
+        .review-data-label {
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        .review-data-value {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .btn-edit-data {
+            background: transparent;
+            border: 2px solid var(--border);
+            color: var(--text-main);
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-edit-data:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* Sticky Summary */
+        .summary-card.sticky {
+            position: sticky;
+            top: 20px;
+            transition: box-shadow 0.3s;
+        }
+
+        .summary-card.sticky-active {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+        }
+
         footer {
             text-align: center;
             padding: 20px;
@@ -295,7 +444,8 @@
                 {% if (vuelo.get('precio_asientos', 0) | float) > 0 %}
                 <div class="detail-row">
                     <span>💺 Asientos</span>
-                    <span style="font-weight:500; color:var(--text-main);">+{{ vuelo.get('precio_asientos', 0) }}€</span>
+                    <span style="font-weight:500; color:var(--text-main);">+{{ vuelo.get('precio_asientos', 0)
+                        }}€</span>
                 </div>
                 {% endif %}
             </div>
@@ -348,8 +498,9 @@
                         </div>
                         {% endfor %}
                     </div>
-                    
-                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0; display: flex; gap: 15px;">
+
+                    <div
+                        style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0; display: flex; gap: 15px;">
                         <button onclick="window.history.back()" class="btn-edit-data">
                             <i class="fa-solid fa-arrow-left"></i> Volver a Buscar
                         </button>
@@ -363,26 +514,30 @@
             <!-- Step 2: Payment -->
             <div class="checkout-step" id="checkout-step-2">
                 <div class="payment-card">
-            <div class="secure-badge">
-                <i class="fa-solid fa-lock"></i> Pago Seguro SSL
-            </div>
+                    <div class="secure-badge">
+                        <i class="fa-solid fa-lock"></i> Pago Seguro SSL
+                    </div>
 
-            <h2 style="margin-bottom: 20px; font-weight:700;">Datos de Tarjeta</h2>
+                    <h2 style="margin-bottom: 20px; font-weight:700;">Checkout Seguro con Stripe</h2>
 
-            <!-- Duffel Custom Element with Locale -->
-            <duffel-card-form id="duffel-card-component" locale="es" lang="es"></duffel-card-form>
+                    <!-- Spacer invisible para forzar ancho del contenedor -->
+                    <div style="min-width: 500px; height: 0; overflow: hidden;" aria-hidden="true">&nbsp;</div>
 
-            <div style="display: flex; gap: 12px; margin-top: 20px;">
-                <button onclick="volverARevisar()" class="btn-edit-data" style="padding: 16px 24px;">
-                    <i class="fa-solid fa-arrow-left"></i> Volver
-                </button>
-                <button id="btn-pay" class="pay-btn" onclick="procesarPago()" style="flex: 1; margin-top: 0;">
-                    Pagar <span id="btn-total" style="margin-left: 5px;">{{ reserva.precio_total }}</span>€ <i
-                        class="fa-solid fa-arrow-right"></i>
-                </button>
-            </div>
+                    <div style="padding:16px;border:1px dashed var(--border);border-radius:8px;color:var(--text-light);">
+                        Te estamos redirigiendo al checkout de Stripe…
+                    </div>
 
-            <div id="error-message" class="error-msg"></div>
+                    <div style="display: flex; gap: 12px; margin-top: 20px;">
+                        <button onclick="volverARevisar()" class="btn-edit-data" style="padding: 16px 24px;">
+                            <i class="fa-solid fa-arrow-left"></i> Volver
+                        </button>
+                        <button id="btn-pay" class="pay-btn" onclick="procesarPago()" style="flex: 1; margin-top: 0;">
+                            Continuar a Stripe <span id="btn-total" style="margin-left: 5px;">{{ reserva.precio_total }}</span>€ <i
+                                class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+
+                    <div id="error-message" class="error-msg"></div>
                 </div>
             </div>
         </div>
@@ -392,13 +547,17 @@
                 <i class="fa-solid fa-lock"></i> Pago Seguro SSL
             </div>
 
-            <h2 style="margin-bottom: 20px; font-weight:700;">Datos de Tarjeta</h2>
+            <h2 style="margin-bottom: 20px; font-weight:700;">Checkout Seguro con Stripe</h2>
 
-            <!-- Duffel Custom Element with Locale -->
-            <duffel-card-form id="duffel-card-component" locale="es" lang="es"></duffel-card-form>
+            <!-- Spacer invisible para forzar ancho del contenedor -->
+            <div style="min-width: 500px; height: 0; overflow: hidden;" aria-hidden="true">&nbsp;</div>
+
+            <div style="padding:16px;border:1px dashed var(--border);border-radius:8px;color:var(--text-light);">
+                Te estamos redirigiendo al checkout de Stripe…
+            </div>
 
             <button id="btn-pay" class="pay-btn" onclick="procesarPago()">
-                Pagar <span id="btn-total" style="margin-left: 5px;">{{ reserva.precio_total }}</span>€ <i
+                Continuar a Stripe <span id="btn-total" style="margin-left: 5px;">{{ reserva.precio_total }}</span>€ <i
                     class="fa-solid fa-arrow-right"></i>
             </button>
 
@@ -423,83 +582,44 @@
         const totalAmount = parseFloat("{{ reserva.precio_total }}");
         const currency = "EUR";
 
-        const cardComponent = document.getElementById('duffel-card-component');
         const btnPay = document.getElementById('btn-pay');
         const errorDiv = document.getElementById('error-message');
+        let autoRedirectTriggered = false;
 
         async function initPayment() {
             try {
-                // 1. Crear Payment Intent
-                console.log('💳 Creando Payment Intent...');
-                const resIntent = await fetch('/api/vuelos/payment-intent', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        amount: parseFloat(totalAmount).toFixed(2),
-                        currency: currency,
-                        reserva_id: reservaId
-                    })
-                });
-                const dataIntent = await resIntent.json();
-                if (dataIntent.manual_payment && dataIntent.redirect_url) {
-                    window.location.href = dataIntent.redirect_url;
-                    return;
-                }
-                if (!dataIntent.success) throw new Error(dataIntent.error || 'Error al inicializar el pago');
-
-                // 2. Obtener Client Component Key
-                console.log('🔑 Obteniendo Component Key...');
-                const resKey = await fetch('/api/vuelos/client-component-key', { method: 'POST' });
-                const dataKey = await resKey.json();
-                if (dataKey.manual_payment && dataKey.reason === 'unavailable_feature') {
-                    window.location.href = `/reserva/pendiente-pago/${codigoReserva}`;
-                    return;
-                }
-                if (!dataKey.success) throw new Error(dataKey.error || 'Error al obtener clave de componente');
-                if (!dataKey.client_key || String(dataKey.client_key).trim() === '') {
-                    throw new Error('La clave de componente Duffel está vacía');
-                }
-
-                // 3. Renderizar Componente
-                console.log('🎨 Renderizando Custom Element...');
-                if (cardComponent.render) {
-                    cardComponent.render({
-                        clientKey: dataKey.client_key,
-                        intent: 'to-create-card-for-temporary-use',
-                        // Intentamos pasar locale aquí, que es lo más probable
-                        locale: 'es',
-                        styles: {
-                            root: { fontFamily: 'Inter, sans-serif' }
-                        }
-                    });
-                } else {
-                    throw new Error("El componente de pago no está disponible. Por favor, recarga la página.");
-                }
-
-                // Listeners for Custom Element events
-                cardComponent.addEventListener('onCreateCardForTemporaryUseSuccess', onCardSuccess);
-                cardComponent.addEventListener('onCreateCardForTemporaryUseFailure', onCardFailure);
+                console.log('✅ Checkout Stripe listo para reserva Duffel con emisión por balance.');
 
             } catch (e) {
-                const mensaje = String(e && e.message ? e.message : e || '');
-                if (mensaje.includes('unavailable_feature') || mensaje.includes('Duffel Payments is not available')) {
-                    window.location.href = `/reserva/pendiente-pago/${codigoReserva}`;
-                    return;
-                }
-                showError("❌ Error al inicializar el pago: " + e.message + ". Por favor, intenta de nuevo o contacta con nuestro equipo.");
+                showError("❌ Error al inicializar el pago: " + (e.message || e) + ". Por favor, intenta de nuevo o contacta con nuestro equipo.");
                 btnPay.disabled = true;
             }
         }
 
-        function procesarPago() {
+        async function procesarPago() {
             btnPay.disabled = true;
-            btnPay.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
+            btnPay.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Redirigiendo a Stripe...';
             errorDiv.style.display = 'none';
 
-            if (cardComponent.createCardForTemporaryUse) {
-                cardComponent.createCardForTemporaryUse();
-            } else {
-                showError("Componente no listo");
+            try {
+                const res = await fetch('/api/vuelos/create-checkout-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        codigo_reserva: codigoReserva
+                    })
+                });
+
+                const data = await res.json();
+                if (!res.ok || !data.success || !data.url) {
+                    throw new Error(data.error || 'No se pudo iniciar Stripe Checkout');
+                }
+
+                window.location.href = data.url;
+            } catch (err) {
+                showError("❌ Error iniciando el pago: " + err.message + ". Intenta de nuevo o contacta con nosotros.");
+                btnPay.disabled = false;
+                btnPay.innerHTML = 'Reintentar Pago <i class="fa-solid fa-arrow-right"></i>';
             }
         }
 
@@ -520,9 +640,7 @@
                 });
 
                 const data = await res.json();
-                if (data.manual_payment && data.redirect_url) {
-                    window.location.href = data.redirect_url;
-                } else if (data.success) {
+                if (data.success) {
                     window.location.href = '/success';
                 } else {
                     throw new Error(data.error || 'Error desconocido al confirmar el pago');
@@ -536,8 +654,9 @@
         }
 
         function onCardFailure(e) {
-            console.error("❌ Error tarjeta:", e.detail.error);
-            const errorMsg = e.detail.error.message || "Error desconocido";
+            console.error("❌ Error tarjeta FULL DETAIL:", JSON.stringify(e.detail, null, 2));
+            console.error("❌ Error tarjeta raw:", e.detail);
+            const errorMsg = (e.detail && e.detail.error && e.detail.error.message) || JSON.stringify(e.detail) || "Error desconocido";
 
             // Log security event
             console.warn("🚨 PAYMENT FAILURE - Security Event:", {
@@ -548,9 +667,9 @@
 
             // FASE 6: Mensajes de error mejorados en español
             let userMessage = "";
-            
+
             if (errorMsg.includes("unavailable") || errorMsg.includes("access to it") || errorMsg.includes("timeout")) {
-                userMessage = "⏱️ El servicio de pago no está disponible temporalmente. Intenta de nuevo en unos minutos o usa pago manual.";
+                userMessage = "⏱️ El servicio de pago no está disponible temporalmente. Intenta de nuevo en unos minutos.";
             } else if (errorMsg.includes("declined") || errorMsg.includes("rechazada")) {
                 userMessage = "❌ Tu tarjeta ha sido rechazada. Por favor:\n• Verifica que los datos sean correctos\n• Comprueba que tengas fondos suficientes\n• Contacta con tu banco si el problema persiste";
             } else if (errorMsg.includes("expired") || errorMsg.includes("caducada")) {
@@ -587,15 +706,15 @@
             // Ocultar step 1, mostrar step 2
             step1.classList.remove('active');
             step2.classList.add('active');
-            
+
             // Actualizar indicadores de progreso
             indicator1.classList.remove('active');
             indicator1.classList.add('completed');
             indicator1.querySelector('.progress-step-circle').classList.add('completed');
             indicator1.querySelector('.progress-step-circle').textContent = '';
-            
+
             indicator2.classList.add('active');
-            
+
             // Scroll suave al inicio
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -613,14 +732,14 @@
             // Mostrar step 1, ocultar step 2
             step2.classList.remove('active');
             step1.classList.add('active');
-            
+
             // Actualizar indicadores
             indicator2.classList.remove('active');
             indicator1.classList.remove('completed');
             indicator1.classList.add('active');
             indicator1.querySelector('.progress-step-circle').classList.remove('completed');
             indicator1.querySelector('.progress-step-circle').textContent = '1';
-            
+
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
@@ -632,13 +751,13 @@
             let lastScroll = 0;
             window.addEventListener('scroll', () => {
                 const currentScroll = window.pageYOffset;
-                
+
                 if (currentScroll > 150) {
                     summaryCard.classList.add('sticky-active');
                 } else {
                     summaryCard.classList.remove('sticky-active');
                 }
-                
+
                 lastScroll = currentScroll;
             });
         }
@@ -646,6 +765,12 @@
         document.addEventListener("DOMContentLoaded", () => {
             initPayment();
             initStickySummary();
+            if (!autoRedirectTriggered) {
+                autoRedirectTriggered = true;
+                setTimeout(() => {
+                    procesarPago();
+                }, 150);
+            }
         });
     </script>
 

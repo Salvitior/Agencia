@@ -160,6 +160,21 @@
             gap: 10px;
         }
 
+        .success {
+            background: #ecfdf5;
+            color: #166534;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            font-size: 0.95rem;
+            text-align: center;
+            border: 1px solid #86efac;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
         /* Result Styles */
         .result-box {
             background: #f0fdf4;
@@ -253,6 +268,29 @@
             color: var(--primary);
         }
 
+        .summary-panel {
+            margin-top: 20px;
+            background: #eef2ff;
+            border: 1px solid #c7d2fe;
+            border-radius: 12px;
+            padding: 14px;
+            text-align: left;
+        }
+
+        .summary-title {
+            font-weight: 700;
+            color: #3730a3;
+            font-size: 0.95rem;
+            margin-bottom: 8px;
+        }
+
+        .summary-list {
+            margin: 0;
+            padding-left: 18px;
+            color: #4338ca;
+            font-size: 0.9rem;
+        }
+
         /* Identity Collection Section */
         .identity-box {
             background: #f8fafc;
@@ -339,15 +377,15 @@
         <div class="card">
             <h1>Gestión de Check-in</h1>
 
-            {% if error %}
-            <div class="error">
+            {% if message %}
+            <div class="{{ 'success' if message_type == 'success' else 'error' }}">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
                     <line x1="12" y1="8" x2="12" y2="12"></line>
                     <line x1="12" y1="16" x2="12.01" y2="16"></line>
                 </svg>
-                {{ error }}
+                {{ message }}
             </div>
             {% endif %}
 
@@ -374,6 +412,17 @@
                         </a>
                     </div>
                     {% endif %}
+
+                    <div class="summary-panel">
+                        <div class="summary-title">Resumen rápido de tu check-in</div>
+                        <ul class="summary-list">
+                            <li>Localizador activo: <strong>{{ booking_ref }}</strong></li>
+                            {% if checkin_date %}
+                            <li>Ventana estimada de apertura: {{ checkin_date }}</li>
+                            {% endif %}
+                            <li>Completa los datos de identidad para activar avisos automáticos.</li>
+                        </ul>
+                    </div>
                 </div>
 
                 <!-- NEW: Identity Document Collection -->
@@ -471,6 +520,15 @@
                 <p style="font-size: 0.85rem; color: #94a3b8; margin-top: 15px; margin-bottom: 0;">
                     *El código de reserva (FL...) lo recibiste en tu email de confirmación de pago.
                 </p>
+
+                <div class="summary-panel">
+                    <div class="summary-title">¿Qué obtendrás al buscar?</div>
+                    <ul class="summary-list">
+                        <li>Localizador de aerolínea (PNR) para check-in online.</li>
+                        <li>Fecha estimada de apertura del check-in.</li>
+                        <li>Formulario para activar auto-checkin con aviso por email.</li>
+                    </ul>
+                </div>
             </form>
             {% endif %}
         </div>

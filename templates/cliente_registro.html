@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='imagenes/logosintexto.png') }}">
+    <title>Crear Cuenta - Viatges Carcaixent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style/style.css') }}">
+    <style>
+        .auth-container { max-width: 500px; margin: 60px auto; padding: 40px; background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+        .auth-container h1 { font-size: 1.8rem; margin-bottom: 8px; color: #1a1a2e; }
+        .auth-container p.subtitle { color: #666; margin-bottom: 32px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 6px; color: #333; font-size: 0.9rem; }
+        .form-group input { width: 100%; padding: 12px 16px; border: 1.5px solid #ddd; border-radius: 10px; font-size: 1rem; transition: border-color 0.2s; box-sizing: border-box; }
+        .form-group input:focus { border-color: #e67e22; outline: none; box-shadow: 0 0 0 3px rgba(230,126,34,0.1); }
+        .btn-auth { width: 100%; padding: 14px; background: linear-gradient(135deg, #e67e22, #d35400); color: #fff; border: none; border-radius: 10px; font-size: 1.05rem; font-weight: 700; cursor: pointer; }
+        .btn-auth:hover { transform: translateY(-1px); }
+        .auth-links { margin-top: 20px; text-align: center; font-size: 0.9rem; }
+        .auth-links a { color: #e67e22; text-decoration: none; font-weight: 600; }
+        .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; }
+        .alert-error { background: #fdf0ed; color: #c0392b; border: 1px solid #f5c6cb; }
+        .checkbox-group { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 20px; }
+        .checkbox-group input[type="checkbox"] { margin-top: 4px; accent-color: #e67e22; }
+        .checkbox-group label { font-size: 0.85rem; color: #555; line-height: 1.4; }
+        .checkbox-group a { color: #e67e22; }
+        .password-hint { font-size: 0.8rem; color: #999; margin-top: 4px; }
+    </style>
+</head>
+<body style="background: #f5f6fa; min-height: 100vh;">
+    <header class="main-header" id="top">
+        <div class="logo-container">
+            <a href="{{ url_for('home') }}">
+                <img src="{{ url_for('static', filename='imagenes/logo.png') }}" alt="Viatges Carcaixent" class="logo-premium">
+            </a>
+        </div>
+    </header>
+
+    <div class="auth-container">
+        <h1>Crear Cuenta</h1>
+        <p class="subtitle">Regístrate para gestionar tus reservas y pasajeros frecuentes</p>
+
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('clientes.registro') }}">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="nombre">Nombre *</label>
+                    <input type="text" id="nombre" name="nombre" required placeholder="Tu nombre" value="{{ request.form.get('nombre', '') }}">
+                </div>
+                <div class="form-group">
+                    <label for="apellidos">Apellidos *</label>
+                    <input type="text" id="apellidos" name="apellidos" required placeholder="Tus apellidos" value="{{ request.form.get('apellidos', '') }}">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email *</label>
+                <input type="email" id="email" name="email" required placeholder="tu@email.com" value="{{ request.form.get('email', '') }}">
+            </div>
+
+            <div class="form-group">
+                <label for="telefono">Teléfono</label>
+                <input type="tel" id="telefono" name="telefono" placeholder="+34 XXX XXX XXX" value="{{ request.form.get('telefono', '') }}">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="password">Contraseña *</label>
+                    <input type="password" id="password" name="password" required placeholder="Min. 8 caracteres" minlength="8">
+                    <div class="password-hint">Mínimo 8 caracteres con al menos un número</div>
+                </div>
+                <div class="form-group">
+                    <label for="password_confirm">Repetir Contraseña *</label>
+                    <input type="password" id="password_confirm" name="password_confirm" required placeholder="Repite la contraseña">
+                </div>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="acepta_privacidad" name="acepta_privacidad" required>
+                <label for="acepta_privacidad">
+                    He leído y acepto la <a href="{{ url_for('seo.politica_privacidad') }}" target="_blank">Política de Privacidad</a> 
+                    y las <a href="{{ url_for('seo.condiciones_compra') }}" target="_blank">Condiciones Generales</a> *
+                </label>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="acepta_marketing" name="acepta_marketing">
+                <label for="acepta_marketing">
+                    Deseo recibir ofertas y promociones por email (puedes darte de baja en cualquier momento)
+                </label>
+            </div>
+
+            <button type="submit" class="btn-auth">Crear Mi Cuenta</button>
+        </form>
+
+        <div class="auth-links" style="margin-top: 24px;">
+            ¿Ya tienes cuenta? <a href="{{ url_for('clientes.login') }}">Iniciar sesión</a>
+        </div>
+    </div>
+</body>
+</html>

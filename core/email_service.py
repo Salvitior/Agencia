@@ -117,11 +117,72 @@ class EmailService:
 
     # Mantener métodos legacy por compatibilidad (opcional, o redirigirlos)
     def enviar_solicitud_tour(self, solicitud_data, tour_data):
-        # Versión simplificada que ya no usamos, pero dejamos para no romper llamadas antiguas si las hubiera
-        pass
+        provider_email = os.getenv('ADMIN_EMAIL', getattr(self, 'admin_email', None))
+        if not provider_email:
+            return False
+
+        nombre_tour = tour_data.get('titulo') or tour_data.get('nombre') or 'Tour sin título'
+        subject = f"🔔 Nueva solicitud de tour: {nombre_tour}"
+        html_body = f"""
+        <html>
+        <body style="font-family: sans-serif; background-color: #f8fafc; padding: 20px;">
+        <div style="max-width: 600px; margin: auto; background: white; padding: 24px; border-radius: 10px;">
+            <h2 style="margin-top: 0; color: #1e293b;">Nueva solicitud de tour</h2>
+            <ul>
+                <li><strong>Tour:</strong> {nombre_tour}</li>
+                <li><strong>Cliente:</strong> {solicitud_data.get('nombre', '')}</li>
+                <li><strong>Email:</strong> {solicitud_data.get('email', '')}</li>
+                <li><strong>Teléfono:</strong> {solicitud_data.get('telefono', '')}</li>
+                <li><strong>Personas:</strong> {solicitud_data.get('num_personas', 1)}</li>
+            </ul>
+            <p><strong>Mensaje:</strong></p>
+            <p style="background: #f3f4f6; padding: 12px; border-radius: 8px;">
+                {solicitud_data.get('mensaje', 'Sin mensaje')}
+            </p>
+        </div>
+        </body>
+        </html>
+        """
+        return self._send_raw(provider_email, subject, html_body)
 
     def enviar_notificacion_pedido(self, pedido_data):
-        # Para vuelos
-        pass
+        admin_email = os.getenv('ADMIN_EMAIL', getattr(self, 'admin_email', None))
+        if not admin_email:
+            return False
+
+        subject = f"🧾 Nuevo pedido registrado: {pedido_data.get('codigo_reserva', 'SIN-CODIGO')}"
+        html_body = f"""
+        <html>
+        <body style="font-family: sans-serif; background-color: #f8fafc; padding: 20px;">
+        <div style="max-width: 600px; margin: auto; background: white; padding: 24px; border-radius: 10px;">
+            <h2 style="margin-top: 0; color: #1e293b;">Notificación de pedido</h2>
+            <ul>
+                <li><strong>Código:</strong> {pedido_data.get('codigo_reserva', '')}</li>
+                <li><strong>Cliente:</strong> {pedido_data.get('nombre_cliente', '')}</li>
+                <li><strong>Email:</strong> {pedido_data.get('email_cliente', '')}</li>
+                <li><strong>Importe:</strong> {pedido_data.get('precio_total', '')} {pedido_data.get('moneda', 'EUR')}</li>
+                <li><strong>Estado:</strong> {pedido_data.get('estado', '')}</li>
+            </ul>
+        </div>
+        </body>
+        </html>
+        """
+        return self._send_raw(admin_email, subject, html_body)
+
+    def enviar_confirmacion_cliente(self, email, nombre, tour_titulo):
+        subject = f"✅ Solicitud recibida: {tour_titulo}"
+        html_body = f"""
+        <html>
+        <body style="font-family: sans-serif; background-color: #f8fafc; padding: 20px;">
+        <div style="max-width: 600px; margin: auto; background: white; padding: 24px; border-radius: 10px;">
+            <h2 style="margin-top: 0; color: #1e293b;">Hemos recibido tu solicitud</h2>
+            <p>Hola {nombre},</p>
+            <p>Tu solicitud para el tour <strong>{tour_titulo}</strong> se ha enviado correctamente.</p>
+            <p>En breve nos pondremos en contacto contigo con la disponibilidad y los siguientes pasos.</p>
+        </div>
+        </body>
+        </html>
+        """
+        return self._send_raw(email, subject, html_body)
 
 email_service = EmailService()

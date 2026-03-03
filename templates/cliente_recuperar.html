@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='imagenes/logosintexto.png') }}">
+    <title>Recuperar Contraseña - Viatges Carcaixent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style/style.css') }}">
+    <style>
+        .auth-container { max-width: 440px; margin: 100px auto; padding: 40px; background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+        .auth-container h1 { font-size: 1.6rem; margin-bottom: 8px; color: #1a1a2e; }
+        .auth-container p.subtitle { color: #666; margin-bottom: 32px; line-height: 1.6; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-weight: 600; margin-bottom: 6px; color: #333; font-size: 0.9rem; }
+        .form-group input { width: 100%; padding: 12px 16px; border: 1.5px solid #ddd; border-radius: 10px; font-size: 1rem; box-sizing: border-box; }
+        .form-group input:focus { border-color: #e67e22; outline: none; }
+        .btn-auth { width: 100%; padding: 14px; background: linear-gradient(135deg, #e67e22, #d35400); color: #fff; border: none; border-radius: 10px; font-size: 1.05rem; font-weight: 700; cursor: pointer; }
+        .auth-links { margin-top: 20px; text-align: center; font-size: 0.9rem; }
+        .auth-links a { color: #e67e22; text-decoration: none; font-weight: 600; }
+        .alert { padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; font-size: 0.9rem; }
+        .alert-success { background: #edf7ed; color: #27ae60; border: 1px solid #c3e6cb; }
+        .alert-error { background: #fdf0ed; color: #c0392b; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body style="background: #f5f6fa; min-height: 100vh;">
+    <header class="main-header" id="top">
+        <div class="logo-container">
+            <a href="{{ url_for('home') }}">
+                <img src="{{ url_for('static', filename='imagenes/logo.png') }}" alt="Viatges Carcaixent" class="logo-premium">
+            </a>
+        </div>
+    </header>
+
+    <div class="auth-container">
+        <h1>Recuperar Contraseña</h1>
+        <p class="subtitle">Introduce tu email y te enviaremos un enlace para restablecer tu contraseña.</p>
+
+        {% if success %}
+        <div class="alert alert-success">{{ success }}</div>
+        {% endif %}
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('clientes.recuperar_password') }}">
+            <div class="form-group">
+                <label for="email">Email registrado</label>
+                <input type="email" id="email" name="email" required placeholder="tu@email.com">
+            </div>
+            <button type="submit" class="btn-auth">Enviar enlace de recuperación</button>
+        </form>
+
+        <div class="auth-links">
+            <a href="{{ url_for('clientes.login') }}">← Volver al inicio de sesión</a>
+        </div>
+    </div>
+</body>
+</html>

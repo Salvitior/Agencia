@@ -1,0 +1,84 @@
+<!-- Cookie Consent Banner - RGPD / LSSI Compliant -->
+<div id="cookie-banner" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#1a1a2e; color:#fff; padding:20px 24px; z-index:99999; box-shadow:0 -4px 20px rgba(0,0,0,0.15);">
+    <div style="max-width:1100px; margin:0 auto; display:flex; align-items:center; gap:20px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:300px;">
+            <strong style="font-size:1rem;">🍪 Utilizamos cookies</strong>
+            <p style="font-size:0.85rem; opacity:0.85; margin-top:4px; line-height:1.5;">
+                Usamos cookies propias y de terceros para mejorar tu experiencia, analizar el tráfico y personalizar contenido.
+                Puedes aceptar todas, configurarlas o rechazar las no esenciales.
+                <a href="/legal/cookies" style="color:#e67e22; text-decoration:underline;">Más información</a>
+            </p>
+        </div>
+        <div style="display:flex; gap:10px; flex-shrink:0;">
+            <button onclick="cookieConsent('reject')" style="padding:10px 20px; background:transparent; border:1.5px solid rgba(255,255,255,0.3); color:#fff; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.9rem;">Solo necesarias</button>
+            <button onclick="document.getElementById('cookie-config').style.display='block'" style="padding:10px 20px; background:transparent; border:1.5px solid rgba(255,255,255,0.3); color:#fff; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.9rem;">Configurar</button>
+            <button onclick="cookieConsent('accept')" style="padding:10px 20px; background:#e67e22; border:none; color:#fff; border-radius:8px; cursor:pointer; font-weight:700; font-size:0.9rem;">Aceptar todas</button>
+        </div>
+    </div>
+
+    <!-- Configuration panel (hidden by default) -->
+    <div id="cookie-config" style="display:none; max-width:1100px; margin:16px auto 0; padding:20px; background:rgba(255,255,255,0.05); border-radius:10px;">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" checked disabled style="accent-color:#e67e22;">
+                <span><strong>Necesarias</strong><br><small style="opacity:0.7;">Siempre activas</small></span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="cookie-funcional" checked style="accent-color:#e67e22;">
+                <span><strong>Funcionales</strong><br><small style="opacity:0.7;">Preferencias</small></span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="cookie-analitica" style="accent-color:#e67e22;">
+                <span><strong>Analíticas</strong><br><small style="opacity:0.7;">Estadísticas</small></span>
+            </label>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="cookie-marketing" style="accent-color:#e67e22;">
+                <span><strong>Marketing</strong><br><small style="opacity:0.7;">Publicidad</small></span>
+            </label>
+        </div>
+        <button onclick="cookieConsent('custom')" style="margin-top:16px; padding:10px 24px; background:#e67e22; border:none; color:#fff; border-radius:8px; cursor:pointer; font-weight:700;">Guardar preferencias</button>
+    </div>
+</div>
+
+<script>
+(function() {
+    // Check if consent already given
+    if (localStorage.getItem('cookie_consent')) return;
+    
+    // Show banner after short delay
+    setTimeout(function() {
+        document.getElementById('cookie-banner').style.display = 'block';
+    }, 1000);
+})();
+
+function cookieConsent(type) {
+    var consent = {
+        necesarias: true,
+        funcionales: type === 'accept' || (type === 'custom' && document.getElementById('cookie-funcional').checked),
+        analiticas: type === 'accept' || (type === 'custom' && document.getElementById('cookie-analitica').checked),
+        marketing: type === 'accept' || (type === 'custom' && document.getElementById('cookie-marketing').checked),
+        fecha: new Date().toISOString()
+    };
+
+    localStorage.setItem('cookie_consent', JSON.stringify(consent));
+    document.getElementById('cookie-banner').style.display = 'none';
+
+    // Send consent to server
+    var sessionId = 'sess_' + Math.random().toString(36).substr(2, 12);
+    fetch('/api/cookies/consent', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            session_id: sessionId,
+            funcionales: consent.funcionales,
+            analiticas: consent.analiticas,
+            marketing: consent.marketing
+        })
+    }).catch(function() {});
+
+    // Enable/disable analytics
+    if (consent.analiticas && typeof gtag === 'function') {
+        gtag('consent', 'update', { analytics_storage: 'granted' });
+    }
+}
+</script>

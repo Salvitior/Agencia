@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='style/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style/tours-catalog.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 
@@ -52,6 +53,91 @@
                     <div class="wheel"></div>
                 </div>
             </div>
+        </div>
+    </section>
+
+    <section class="catalogo-tours-container" id="catalogo-cruceros">
+        <div class="catalogo-layout">
+            <aside class="filtros-sidebar">
+                <div class="filtros-header">
+                    <h3>🚢 Filtrar Cruceros</h3>
+                    <button onclick="resetearFiltros()" class="btn-reset-filtros">Limpiar</button>
+                </div>
+
+                <div class="filtro-grupo">
+                    <label>Buscar</label>
+                    <input type="text" id="search-tours" placeholder="MSC, Royal, Fiordos..." class="input-search-tours">
+                </div>
+
+                <div class="filtro-grupo">
+                    <label>Continente</label>
+                    <div class="filtro-opciones">
+                        {% for continente in filtros.continentes %}
+                        <label class="filtro-checkbox-label" for="filtro-cru-cont-{{ loop.index }}">
+                            <input type="checkbox" id="filtro-cru-cont-{{ loop.index }}" class="filtro-continente" value="{{ continente.nombre }}">
+                            <span>{{ continente.nombre }}</span>
+                            <span class="count">({{ continente.count }})</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="filtro-grupo">
+                    <label>Tipo de viaje</label>
+                    <div class="filtro-opciones">
+                        {% for tipo in filtros.tipos %}
+                        <label class="filtro-checkbox-label" for="filtro-cru-tipo-{{ loop.index }}">
+                            <input type="checkbox" id="filtro-cru-tipo-{{ loop.index }}" class="filtro-tipo" value="{{ tipo.nombre }}">
+                            <span>{{ tipo.nombre }}</span>
+                            <span class="count">({{ tipo.count }})</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="filtro-grupo">
+                    <label for="precio-slider">Precio Máximo: <span id="precio-display">{{ filtros.precio_max }}</span>€</label>
+                    <input type="range" id="precio-slider" min="0" max="{{ filtros.precio_max }}" value="{{ filtros.precio_max }}" step="100" class="slider-precio">
+                </div>
+
+                <div class="filtro-grupo">
+                    <label>Proveedor</label>
+                    <select id="filtro-proveedor" class="select-proveedor">
+                        <option value="">Todos</option>
+                        {% for proveedor in filtros.proveedores %}
+                        <option value="{{ proveedor.nombre }}">{{ proveedor.nombre }} ({{ proveedor.count }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </aside>
+
+            <main class="catalogo-main-area">
+                <div class="results-toolbar">
+                    <div class="results-info">
+                        <h2>Cruceros Disponibles</h2>
+                        <p id="results-count">Cargando cruceros...</p>
+                    </div>
+                    <div class="sort-controls">
+                        <label>Ordenar por:</label>
+                        <select id="sort-tours" class="select-sort">
+                            <option value="relevancia">Relevancia</option>
+                            <option value="precio-asc">Precio: Menor a Mayor</option>
+                            <option value="precio-desc">Precio: Mayor a Menor</option>
+                            <option value="duracion-asc">Duración: Corta a Larga</option>
+                            <option value="duracion-desc">Duración: Larga a Corta</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="tours-container" class="tours-grid">
+                    <div class="loading-spinner">
+                        <div class="spinner"></div>
+                        <p>Cargando cruceros...</p>
+                    </div>
+                </div>
+
+                <div id="pagination-container" class="pagination"></div>
+            </main>
         </div>
     </section>
 
@@ -260,7 +346,14 @@
 
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/es.js"></script>
-    <script src="{{ url_for('static', filename='style/script.js') }}"></script>
+    <script>
+        window.TOURS_CATALOG_PRESET = {
+            search: 'crucero',
+            sort: 'precio-asc'
+        };
+    </script>
+    <script src="{{ url_for('static', filename='js/tours-catalog.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
     <div id="side-panel-overlay" class="side-panel-overlay"></div>
 
     <div id="side-panel" class="side-panel">

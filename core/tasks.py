@@ -1,26 +1,10 @@
-import hashlib
-import os
-from cryptography.fernet import Fernet
+"""
+Tasks module - delegates to core.security for all crypto operations.
+This avoids duplicating encryption/hashing logic.
+"""
+from core.security import cifrar as cifrar_dato, descifrar as descifrar_dato, generar_hash_dni
 from database import get_db_connection
 
-# Inicializar Fernet
-FERNET_KEY = os.getenv("ENCRYPTION_KEY").encode()
-cipher_suite = Fernet(FERNET_KEY)
-
-def generar_hash_dni(dni):
-    """Búsqueda rápida (No reversible)"""
-    salt = "COSMIN_SECRET_2026"
-    return hashlib.sha256((dni + salt).encode()).hexdigest()
-
-def cifrar_dato(dato):
-    """Cifrado reversible para recuperación de datos"""
-    if not dato: return None
-    return cipher_suite.encrypt(dato.encode())
-
-def descifrar_dato(dato_cifrado):
-    """Descifrado para mostrar en el Panel de Admin"""
-    if not dato_cifrado: return None
-    return cipher_suite.decrypt(dato_cifrado).decode()
 
 # Ejemplo de cómo usarlo al guardar un pasajero:
 def guardar_pasajero_seguro(id_expediente, nombre, dni):

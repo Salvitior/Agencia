@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='imagenes/logosintexto.png') }}">
+    <title>Mi Área de Cliente - Viatges Carcaixent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style/style.css') }}">
+    <style>
+        body { background: #f5f6fa; }
+        .dashboard { max-width: 1100px; margin: 0 auto; padding: 30px 20px; }
+        .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+        .dash-header h1 { font-size: 1.6rem; color: #1a1a2e; }
+        .dash-header .user-info { display: flex; align-items: center; gap: 12px; }
+        .user-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #e67e22, #d35400); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 1.1rem; }
+        .dash-grid { display: grid; grid-template-columns: 260px 1fr; gap: 24px; }
+        .dash-sidebar { background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); height: fit-content; }
+        .dash-sidebar a { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 10px; color: #333; text-decoration: none; font-weight: 500; transition: background 0.15s; margin-bottom: 4px; }
+        .dash-sidebar a:hover, .dash-sidebar a.active { background: #fff3e6; color: #e67e22; }
+        .dash-sidebar a svg { width: 18px; height: 18px; }
+        .dash-main { min-height: 500px; }
+        .dash-card { background: #fff; border-radius: 14px; padding: 24px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); margin-bottom: 20px; }
+        .dash-card h2 { font-size: 1.2rem; margin-bottom: 16px; color: #1a1a2e; }
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-box { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); text-align: center; }
+        .stat-box .number { font-size: 2rem; font-weight: 800; color: #e67e22; }
+        .stat-box .label { font-size: 0.85rem; color: #888; margin-top: 4px; }
+        .reserva-item { display: grid; grid-template-columns: auto 1fr auto auto; gap: 16px; align-items: center; padding: 16px; border-bottom: 1px solid #f0f0f0; }
+        .reserva-item:last-child { border-bottom: none; }
+        .reserva-code { font-family: monospace; font-weight: 700; font-size: 1rem; color: #1a1a2e; }
+        .reserva-route { font-weight: 600; }
+        .reserva-date { color: #888; font-size: 0.9rem; }
+        .badge { padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; }
+        .badge-pendiente { background: #fff3cd; color: #856404; }
+        .badge-pagado, .badge-confirmado { background: #d4edda; color: #155724; }
+        .badge-emitido { background: #cce5ff; color: #004085; }
+        .badge-cancelado { background: #f8d7da; color: #721c24; }
+        .btn-sm { padding: 6px 14px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; text-decoration: none; cursor: pointer; border: none; }
+        .btn-primary { background: #e67e22; color: #fff; }
+        .btn-outline { background: transparent; border: 1.5px solid #e67e22; color: #e67e22; }
+        .btn-danger { background: #e74c3c; color: #fff; }
+        .empty-state { text-align: center; padding: 60px 20px; color: #999; }
+        .empty-state svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.4; }
+        @media (max-width: 768px) { .dash-grid { grid-template-columns: 1fr; } .reserva-item { grid-template-columns: 1fr; gap: 8px; } }
+    </style>
+</head>
+<body>
+    <header class="main-header" id="top">
+        <div class="logo-container">
+            <a href="{{ url_for('home') }}">
+                <img src="{{ url_for('static', filename='imagenes/logo.png') }}" alt="Viatges Carcaixent" class="logo-premium">
+            </a>
+        </div>
+        <nav class="nav-menu">
+            <ul>
+                <li><a href="{{ url_for('home') }}" class="nav-link">Inicio</a></li>
+                <li><a href="{{ url_for('clientes.dashboard') }}" class="nav-link active">Mi Cuenta</a></li>
+                <li><a href="{{ url_for('clientes.logout') }}" class="nav-link">Cerrar Sesión</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <div class="dashboard">
+        <div class="dash-header">
+            <h1>Hola, {{ cliente.nombre }} 👋</h1>
+            <div class="user-info">
+                <div class="user-avatar">{{ cliente.nombre[0]|upper }}</div>
+                <span>{{ cliente.email }}</span>
+            </div>
+        </div>
+
+        <div class="dash-grid">
+            <!-- Sidebar -->
+            <div class="dash-sidebar">
+                <a href="#" class="active" data-section="reservas">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    Mis Reservas
+                </a>
+                <a href="#" data-section="pasajeros">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                    Pasajeros Frecuentes
+                </a>
+                <a href="#" data-section="perfil">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    Mi Perfil
+                </a>
+                <a href="#" data-section="notificaciones">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    Notificaciones
+                </a>
+                <a href="#" data-section="privacidad">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    Privacidad (RGPD)
+                </a>
+            </div>
+
+            <!-- Main content -->
+            <div class="dash-main">
+                <!-- Stats -->
+                <div class="stats-row" id="stats-row">
+                    <div class="stat-box">
+                        <div class="number" id="stat-reservas">-</div>
+                        <div class="label">Reservas totales</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="number" id="stat-proximos">-</div>
+                        <div class="label">Próximos viajes</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="number" id="stat-pasajeros">-</div>
+                        <div class="label">Pasajeros guardados</div>
+                    </div>
+                </div>
+
+                <!-- Reservas section -->
+                <div class="dash-card" id="section-reservas">
+                    <h2>Mis Reservas</h2>
+                    <div id="reservas-list">
+                        <div class="empty-state">
+                            <p>Cargando reservas...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pasajeros section (hidden by default) -->
+                <div class="dash-card" id="section-pasajeros" style="display:none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h2>Pasajeros Frecuentes</h2>
+                        <button class="btn-sm btn-primary" onclick="mostrarFormPasajero()">+ Añadir Pasajero</button>
+                    </div>
+                    <div id="pasajeros-list">
+                        <div class="empty-state"><p>Cargando pasajeros...</p></div>
+                    </div>
+                </div>
+
+                <!-- Perfil section (hidden by default) -->
+                <div class="dash-card" id="section-perfil" style="display:none;">
+                    <h2>Mi Perfil</h2>
+                    <form id="form-perfil">
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div class="form-group">
+                                <label>Nombre</label>
+                                <input type="text" id="perfil-nombre" value="{{ cliente.nombre }}" style="width:100%; padding:10px; border:1.5px solid #ddd; border-radius:8px; box-sizing:border-box;">
+                            </div>
+                            <div class="form-group">
+                                <label>Apellidos</label>
+                                <input type="text" id="perfil-apellidos" value="{{ cliente.apellidos }}" style="width:100%; padding:10px; border:1.5px solid #ddd; border-radius:8px; box-sizing:border-box;">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top:12px;">
+                            <label>Teléfono</label>
+                            <input type="tel" id="perfil-telefono" value="{{ cliente.telefono or '' }}" style="width:100%; padding:10px; border:1.5px solid #ddd; border-radius:8px; box-sizing:border-box;">
+                        </div>
+                        <button type="submit" class="btn-sm btn-primary" style="margin-top:16px; padding:12px 24px;">Guardar Cambios</button>
+                    </form>
+                </div>
+
+                <!-- Notificaciones section -->
+                <div class="dash-card" id="section-notificaciones" style="display:none;">
+                    <h2>Notificaciones</h2>
+                    <div id="notificaciones-list">
+                        <div class="empty-state"><p>Cargando notificaciones...</p></div>
+                    </div>
+                </div>
+
+                <!-- Privacidad section -->
+                <div class="dash-card" id="section-privacidad" style="display:none;">
+                    <h2>Privacidad y Datos Personales</h2>
+                    <p style="color:#666; margin-bottom:20px;">En cumplimiento del RGPD, puedes solicitar una copia de tus datos o la eliminación de tu cuenta.</p>
+                    <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                        <button class="btn-sm btn-outline" onclick="descargarDatos()">📥 Descargar mis datos</button>
+                        <button class="btn-sm btn-danger" onclick="solicitarEliminacion()">🗑️ Solicitar eliminación de cuenta</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Navigation
+    document.querySelectorAll('.dash-sidebar a').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const section = link.dataset.section;
+            document.querySelectorAll('.dash-sidebar a').forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+            document.querySelectorAll('[id^="section-"]').forEach(s => s.style.display = 'none');
+            document.getElementById('section-' + section).style.display = 'block';
+            if (section === 'reservas') cargarReservas();
+            if (section === 'pasajeros') cargarPasajeros();
+            if (section === 'notificaciones') cargarNotificaciones();
+        });
+    });
+
+    // Load reservations
+    async function cargarReservas() {
+        try {
+            const r = await fetch('/cliente/api/reservas');
+            const data = await r.json();
+            const list = document.getElementById('reservas-list');
+            
+            if (!data.reservas || data.reservas.length === 0) {
+                list.innerHTML = '<div class="empty-state"><p>No tienes reservas todavía.</p><a href="/" class="btn-sm btn-primary" style="display:inline-block; margin-top:12px;">Buscar vuelos</a></div>';
+                return;
+            }
+            
+            document.getElementById('stat-reservas').textContent = data.reservas.length;
+            
+            list.innerHTML = data.reservas.map(r => `
+                <div class="reserva-item">
+                    <span class="reserva-code">${r.codigo_reserva}</span>
+                    <div>
+                        <div class="reserva-route">${r.datos_vuelo?.origen || '---'} → ${r.datos_vuelo?.destino || '---'}</div>
+                        <div class="reserva-date">${r.fecha_creacion ? new Date(r.fecha_creacion).toLocaleDateString('es-ES') : ''}</div>
+                    </div>
+                    <span class="badge badge-${r.estado?.toLowerCase()}">${r.estado}</span>
+                    <div style="display:flex; gap:8px;">
+                        ${r.estado === 'EMITIDO' ? '<a href="/cliente/api/reservas/' + r.codigo_reserva + '/eticket" class="btn-sm btn-outline">E-Ticket</a>' : ''}
+                        <span style="font-weight:700;">€${r.precio_total?.toFixed(2) || '0.00'}</span>
+                    </div>
+                </div>
+            `).join('');
+        } catch(e) {
+            console.error('Error cargando reservas:', e);
+        }
+    }
+
+    async function cargarPasajeros() {
+        try {
+            const r = await fetch('/cliente/api/pasajeros-frecuentes');
+            const data = await r.json();
+            const list = document.getElementById('pasajeros-list');
+            document.getElementById('stat-pasajeros').textContent = data.pasajeros?.length || 0;
+            
+            if (!data.pasajeros || data.pasajeros.length === 0) {
+                list.innerHTML = '<div class="empty-state"><p>No tienes pasajeros guardados.</p></div>';
+                return;
+            }
+            
+            list.innerHTML = data.pasajeros.map(p => `
+                <div class="reserva-item" style="grid-template-columns: 1fr auto;">
+                    <div>
+                        <strong>${p.nombre} ${p.apellidos}</strong>
+                        <div style="color:#888; font-size:0.85rem;">${p.tipo_documento}: ${p.numero_documento_parcial || '***'} | ${p.nacionalidad || ''}</div>
+                    </div>
+                    <button class="btn-sm btn-danger" onclick="eliminarPasajero(${p.id})" style="font-size:0.8rem;">Eliminar</button>
+                </div>
+            `).join('');
+        } catch(e) {
+            console.error('Error cargando pasajeros:', e);
+        }
+    }
+
+    async function cargarNotificaciones() {
+        try {
+            const r = await fetch('/cliente/api/notificaciones');
+            const data = await r.json();
+            const list = document.getElementById('notificaciones-list');
+            
+            if (!data.notificaciones || data.notificaciones.length === 0) {
+                list.innerHTML = '<div class="empty-state"><p>No tienes notificaciones.</p></div>';
+                return;
+            }
+            
+            list.innerHTML = data.notificaciones.map(n => `
+                <div style="padding:12px 0; border-bottom:1px solid #f0f0f0; ${n.leida ? 'opacity:0.6;' : ''}">
+                    <div style="display:flex; justify-content:space-between;">
+                        <strong>${n.titulo}</strong>
+                        <span style="color:#888; font-size:0.8rem;">${new Date(n.fecha).toLocaleString('es-ES')}</span>
+                    </div>
+                    <p style="color:#555; margin-top:4px; font-size:0.9rem;">${n.mensaje}</p>
+                </div>
+            `).join('');
+        } catch(e) {
+            console.error('Error cargando notificaciones:', e);
+        }
+    }
+
+    async function descargarDatos() {
+        window.location.href = '/cliente/api/descargar-datos';
+    }
+
+    async function solicitarEliminacion() {
+        if (!confirm('¿Estás seguro de que quieres solicitar la eliminación de tu cuenta? Esta acción es irreversible.')) return;
+        try {
+            const r = await fetch('/cliente/api/solicitar-eliminacion', { method: 'POST' });
+            const data = await r.json();
+            alert(data.message || 'Solicitud registrada. Te contactaremos en breve.');
+        } catch(e) {
+            alert('Error al procesar la solicitud.');
+        }
+    }
+
+    // Profile form
+    document.getElementById('form-perfil').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            const r = await fetch('/cliente/api/perfil', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    nombre: document.getElementById('perfil-nombre').value,
+                    apellidos: document.getElementById('perfil-apellidos').value,
+                    telefono: document.getElementById('perfil-telefono').value,
+                })
+            });
+            const data = await r.json();
+            alert(data.success ? 'Perfil actualizado correctamente' : (data.error || 'Error'));
+        } catch(e) {
+            alert('Error al guardar cambios.');
+        }
+    });
+
+    // Initial load
+    cargarReservas();
+    </script>
+</body>
+</html>

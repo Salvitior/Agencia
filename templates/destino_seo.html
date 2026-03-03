@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='imagenes/logosintexto.png') }}">
+    <title>{{ destino.titulo }} - Viatges Carcaixent</title>
+    <meta name="description" content="{{ destino.descripcion }}">
+    <meta property="og:title" content="{{ meta.og.title }}">
+    <meta property="og:description" content="{{ meta.og.description }}">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="es_ES">
+    <link rel="canonical" href="{{ meta.canonical }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style/style.css') }}">
+    <script type="application/ld+json">{{ schema_agencia | safe }}</script>
+    <style>
+        .seo-hero { background: linear-gradient(135deg, #1a1a2e, #16213e); color: #fff; padding: 80px 20px 60px; text-align: center; }
+        .seo-hero h1 { font-size: 2.5rem; margin-bottom: 12px; }
+        .seo-hero p { font-size: 1.1rem; opacity: 0.85; max-width: 600px; margin: 0 auto; }
+        .seo-content { max-width: 900px; margin: 40px auto; padding: 0 20px; }
+        .search-cta { background: #fff; border-radius: 16px; padding: 40px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); text-align: center; margin-bottom: 40px; }
+        .search-cta h2 { font-size: 1.4rem; margin-bottom: 20px; color: #1a1a2e; }
+        .btn-search { display: inline-block; padding: 14px 40px; background: linear-gradient(135deg, #e67e22, #d35400); color: #fff; border-radius: 10px; text-decoration: none; font-weight: 700; font-size: 1.1rem; }
+        .btn-search:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(230,126,34,0.3); }
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px; margin: 40px 0; }
+        .info-card { background: #fff; padding: 24px; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+        .info-card h3 { color: #1a1a2e; margin-bottom: 8px; }
+        .info-card p { color: #666; line-height: 1.6; font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+    <header class="main-header" id="top">
+        <div class="logo-container">
+            <a href="{{ url_for('home') }}">
+                <img src="{{ url_for('static', filename='imagenes/logo.png') }}" alt="Viatges Carcaixent" class="logo-premium">
+            </a>
+        </div>
+        <nav class="nav-menu">
+            <ul>
+                <li><a href="{{ url_for('home') }}" class="nav-link">Inicio</a></li>
+                <li><a href="{{ url_for('destinos') }}" class="nav-link active">Destinos</a></li>
+                <li><a href="{{ url_for('contacto') }}" class="nav-link">Contacto</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <section class="seo-hero">
+        <h1>{{ destino.h1 }}</h1>
+        <p>{{ destino.descripcion }}</p>
+    </section>
+
+    <div class="seo-content">
+        <div class="search-cta">
+            <h2>Busca y compara vuelos a {{ destino.h1.replace('Vuelos a ', '') }}</h2>
+            <p style="color: #666; margin-bottom: 24px;">Encuentra las mejores tarifas entre cientos de aerolíneas</p>
+            <a href="/?destino={{ destino.iata }}" class="btn-search">Buscar vuelos →</a>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-card">
+                <h3>✈️ Aeropuerto</h3>
+                <p>Código IATA: <strong>{{ destino.iata }}</strong>. Vuelos directos y con escala desde los principales aeropuertos españoles.</p>
+            </div>
+            <div class="info-card">
+                <h3>💰 Mejores precios</h3>
+                <p>Comparamos automáticamente precios de múltiples aerolíneas para ofrecerte la mejor tarifa disponible.</p>
+            </div>
+            <div class="info-card">
+                <h3>🛡️ Reserva segura</h3>
+                <p>Pago seguro con tarjeta a través de Stripe. Billete electrónico oficial inmediato.</p>
+            </div>
+            <div class="info-card">
+                <h3>📱 Gestión online</h3>
+                <p>Gestiona tu reserva, añade equipaje, selecciona asiento y descarga tu e-ticket desde tu área de cliente.</p>
+            </div>
+        </div>
+
+        <div style="background:#fff; padding:30px; border-radius:14px; box-shadow:0 2px 12px rgba(0,0,0,0.06); margin-bottom:40px;">
+            <h2 style="color:#1a1a2e; margin-bottom:16px;">Consejos para tu viaje</h2>
+            <ul style="color:#555; line-height:1.8;">
+                <li>Reserva con antelación para conseguir los mejores precios.</li>
+                <li>Compara vuelos de martes a jueves, suelen ser más económicos.</li>
+                <li>Contrata el seguro de viaje para mayor tranquilidad.</li>
+                <li>Verifica la documentación necesaria antes de viajar.</li>
+                <li>Realiza el check-in online 24-48h antes del vuelo.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

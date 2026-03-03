@@ -6,7 +6,7 @@ import threading
 import requests
 import re
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from flask import Flask, request, jsonify, render_template, redirect, Response, send_file, url_for
 from flask.json.provider import DefaultJSONProvider
@@ -42,14 +42,14 @@ except ImportError:
 
 
 # ==========================================
-# 0. INICIALIZACIÓN GLOBAL
+# 0. CONFIGURACIÓN INICIAL Y LOGS
 # ==========================================
-motor = MotorBusqueda()
-amadeus_motor = AmadeusAdapter()
-email_manager = EmailManager()
-nomad_optimizer = NomadOptimizer(motor)
+
+# ⚠️ IMPORTANTE: load_dotenv() DEBE estar ANTES de crear instancias
+# que leen variables de entorno (MotorBusqueda, AmadeusAdapter, etc.)
+load_dotenv()
+
 # CUSTOM JSON PROVIDER FOR DECIMAL
-# ==========================================
 class CustomJSONProvider(DefaultJSONProvider):
     def default(self, obj):
         if isinstance(obj, Decimal):
@@ -57,11 +57,12 @@ class CustomJSONProvider(DefaultJSONProvider):
         return super().default(obj)
 
 # ==========================================
-# 1. CONFIGURACIÓN INICIAL Y LOGS
+# 1. INICIALIZACIÓN GLOBAL
 # ==========================================
-
-# Cargar variables de entorno
-load_dotenv()
+motor = MotorBusqueda()
+amadeus_motor = AmadeusAdapter()
+email_manager = EmailManager()
+nomad_optimizer = NomadOptimizer(motor)
 
 # Configurar logging con rotación (max 10MB, 5 backups)
 from logging.handlers import RotatingFileHandler
@@ -119,7 +120,7 @@ app.config['SECRET_KEY'] = SECRET_KEY
 # 🔐 VALIDACIÓN CRÍTICA: DUFFEL_API_TOKEN
 # ==========================================
 DUFFEL_TOKEN = os.getenv("DUFFEL_API_TOKEN")
-DUFFEL_ACCOUNT_ID = os.getenv("DUFFEL_ACCOUNT_ID", "8a101ebdcba64c61e2057a1")  # Por defecto: test
+DUFFEL_ACCOUNT_ID = os.getenv("DUFFEL_ACCOUNT_ID", "")
 DUFFEL_ENVIRONMENT = "live"
 DUFFEL_DASHBOARD_URL = f"https://app.duffel.com/{DUFFEL_ACCOUNT_ID}/{DUFFEL_ENVIRONMENT}/orders"
 AUTO_CHECKIN_ENABLED = os.getenv('AUTO_CHECKIN_ENABLED', 'true').lower() == 'true'
@@ -156,26 +157,29 @@ AMADEUS_ENABLED = os.getenv("AMADEUS_ENABLED", "false").lower() == "true"
 # ==========================================
 # SWAGGER/OPENAPI CONFIGURATION
 # ==========================================
+_SWAGGER_TITLE = 'Viatges Carcaixent API'
+_SWAGGER_VERSION = '3.0.0'
+_SWAGGER_ROUTE = '/api/docs'
+
 app.config['SWAGGER'] = {
-    'title': 'Viatges Carcaixent API',
-    'version': '3.0.0',
+    'title': _SWAGGER_TITLE,
+    'version': _SWAGGER_VERSION,
     'description': 'API completa para gestión de viajes, vuelos y tours',
     'uiversion': 3,
-    'openapi': '3.0.0',
-    'specs_route': '/api/docs',
+    'openapi': _SWAGGER_VERSION,
+    'specs_route': _SWAGGER_ROUTE,
     'termsOfService': '/legal'
 }
 
-# Configuración de Swagger
 swagger_template = {
-    "openapi": "3.0.0",
+    "openapi": _SWAGGER_VERSION,
     "info": {
-        "title": "Viatges Carcaixent API",
+        "title": _SWAGGER_TITLE,
         "description": "API REST para gestión completa de agencia de viajes",
         "contact": {
             "email": "info@viatgescarcaixent.com"
         },
-        "version": "3.0.0"
+        "version": _SWAGGER_VERSION
     },
     "servers": [
         {
@@ -205,7 +209,7 @@ swagger_config_obj = {
     ],
     'static_url_path': '/flasgger_static',
     'swagger_ui': True,
-    'specs_route': '/api/docs'
+    'specs_route': _SWAGGER_ROUTE
 }
 
 # Inicializar Swagger
@@ -223,7 +227,11 @@ except Exception as e:
 
 # A) Módulos de Base de Datos, Seguridad y Facturación
 try:
-    from database import get_db_session, get_db_connection  # ✅ AÑADIDO get_db_connection
+    from database import (
+        get_db_session, get_db_connection,
+        ReservaVuelo, DuffelSearch, Tour, SalidaTour, Pedido, SolicitudTour, Usuario,
+        init_db
+    )
     from core.matrix_adapter import MatrixOrchestrator
     from core.security import descifrar, cifrar, generar_hash_dni
     from core.invoice_pro import generar_factura_pdf
@@ -234,7 +242,30 @@ except ImportError as e:
     logger.error(f"❌ Error cargando Core: {e}. El panel de administración estará limitado.")
     orchestrator = None
 
-# B) Motor de Búsqueda de Vuelos (Scraper/API)
+
+def _parse_json_field(value, default=None):
+    """Parse JSON string field safely, return default on None/error."""
+    if default is None:
+        default = {}
+    if value is None:
+        return default
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except (ValueError, json.JSONDecodeError):
+            return default
+    return value
+
+
+def _parse_datos_vuelo(reserva):
+    """Parse reserva.datos_vuelo safely → dict."""
+    return _parse_json_field(reserva.datos_vuelo, {})
+
+
+def _parse_pasajeros(reserva):
+    """Parse reserva.pasajeros safely → list."""
+    return _parse_json_field(reserva.pasajeros, [])
+
 # B) Motor de Búsqueda de Vuelos (Scraper/API)
 try:
     from core.scraper_motor import MotorBusqueda
@@ -431,24 +462,25 @@ def buscar_vuelos_api():
         )
 
         try:
-            from database import DuffelSearch, get_db_session
 
             db = get_db_session()
-            results_count = len(resultados) if isinstance(resultados, list) else 0
-            busqueda = DuffelSearch(
-                origen=data.get('origen'),
-                destino=data.get('destino'),
-                fecha=data.get('fecha'),
-                adultos=int(data.get('adultos', 1)),
-                ninos=int(data.get('ninos', 0)),
-                bebes=int(data.get('bebes', 0)),
-                clase=data.get('clase', 'economy'),
-                results_count=results_count,
-                user_ip=request.remote_addr
-            )
-            db.add(busqueda)
-            db.commit()
-            db.close()
+            try:
+                results_count = len(resultados) if isinstance(resultados, list) else 0
+                busqueda = DuffelSearch(
+                    origen=data.get('origen'),
+                    destino=data.get('destino'),
+                    fecha=data.get('fecha'),
+                    adultos=int(data.get('adultos', 1)),
+                    ninos=int(data.get('ninos', 0)),
+                    bebes=int(data.get('bebes', 0)),
+                    clase=data.get('clase', 'economy'),
+                    results_count=results_count,
+                    user_ip=request.remote_addr
+                )
+                db.add(busqueda)
+                db.commit()
+            finally:
+                db.close()
         except Exception as log_err:
             logger.warning(f"⚠️ No se pudo registrar busqueda Duffel: {log_err}")
         return jsonify(resultados)
@@ -533,11 +565,10 @@ def _load_top_calendar_routes_from_history(limit=40):
 
     try:
         from sqlalchemy import func
-        from database import DuffelSearch, get_db_session
 
         db = get_db_session()
         try:
-            since = datetime.utcnow() - timedelta(days=30)
+            since = datetime.now(timezone.utc) - timedelta(days=30)
             top_routes = (
                 db.query(
                     DuffelSearch.origen,
@@ -675,7 +706,7 @@ def refresh_calendar_prices_daily():
         logger.info("ℹ️ Refresh diario de calendario: sin rutas registradas aún")
         return
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     targets = [(now.year, now.month)]
     if now.month == 12:
         targets.append((now.year + 1, 1))
@@ -699,41 +730,43 @@ def process_auto_checkin_queue():
         return
 
     try:
-        from database import ReservaVuelo, get_db_session
         db = get_db_session()
-        now = datetime.utcnow()
-        procesadas = 0
+        try:
+            now = datetime.now(timezone.utc)
+            procesadas = 0
 
-        reservas = db.query(ReservaVuelo).filter(ReservaVuelo.estado == 'LISTO PARA CHECK-IN').all()
-        for reserva in reservas:
-            checkin_open = _extract_checkin_open_datetime(reserva)
-            if not checkin_open or now < checkin_open:
-                continue
+            reservas = db.query(ReservaVuelo).filter(ReservaVuelo.estado == 'LISTO PARA CHECK-IN').all()
+            for reserva in reservas:
+                checkin_open = _extract_checkin_open_datetime(reserva)
+                if not checkin_open or now < checkin_open:
+                    continue
 
-            booking_ref = _extract_booking_reference(reserva)
-            checkin_url = _resolve_airline_checkin_url(reserva)
-            reserva.estado = 'CHECK-IN ABIERTO'
-            nota = f"[AUTO_CHECKIN] Ventana de check-in abierta el {now.strftime('%d/%m/%Y %H:%M')} UTC."
-            reserva.notas = f"{nota} {reserva.notas or ''}".strip()
+                booking_ref = _extract_booking_reference(reserva)
+                checkin_url = _resolve_airline_checkin_url(reserva)
+                reserva.estado = 'CHECK-IN ABIERTO'
+                reserva.checkin_recordatorio_enviado = True
+                nota = f"[AUTO_CHECKIN] Ventana de check-in abierta el {now.strftime('%d/%m/%Y %H:%M')} UTC."
+                reserva.notas = f"{nota} {reserva.notas or ''}".strip()
 
-            if getattr(reserva, 'email_cliente', None):
-                asunto = f"✅ Check-in abierto para tu reserva {reserva.codigo_reserva}"
-                html = f"""
-                <h2>Tu check-in ya está disponible</h2>
-                <p>Reserva: <strong>{reserva.codigo_reserva}</strong></p>
-                <p>Localizador aerolínea: <strong>{booking_ref or 'N/A'}</strong></p>
-                <p>Ya puedes completar el check-in en la web de la aerolínea o en nuestra sección de check-in.</p>
-                {f'<p><a href="{checkin_url}" target="_blank" rel="noopener">Ir al check-in de la aerolínea</a></p>' if checkin_url else ''}
-                <p><a href=\"{os.getenv('APP_URL', 'http://localhost:8000')}/checkin\">Ir a Check-in</a></p>
-                """
-                email_manager.send_email(reserva.email_cliente, asunto, html)
+                if getattr(reserva, 'email_cliente', None):
+                    asunto = f"✅ Check-in abierto para tu reserva {reserva.codigo_reserva}"
+                    html = f"""
+                    <h2>Tu check-in ya está disponible</h2>
+                    <p>Reserva: <strong>{reserva.codigo_reserva}</strong></p>
+                    <p>Localizador aerolínea: <strong>{booking_ref or 'N/A'}</strong></p>
+                    <p>Ya puedes completar el check-in en la web de la aerolínea o en nuestra sección de check-in.</p>
+                    {f'<p><a href="{checkin_url}" target="_blank" rel="noopener">Ir al check-in de la aerolínea</a></p>' if checkin_url else ''}
+                    <p><a href=\"{os.getenv('APP_URL', 'http://localhost:8000')}/checkin\">Ir a Check-in</a></p>
+                    """
+                    email_manager.send_email(reserva.email_cliente, asunto, html)
 
-            procesadas += 1
+                procesadas += 1
 
-        if procesadas:
-            db.commit()
-            logger.info(f"✅ Auto-checkin monitor: {procesadas} reservas actualizadas")
-        db.close()
+            if procesadas:
+                db.commit()
+                logger.info(f"✅ Auto-checkin monitor: {procesadas} reservas actualizadas")
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(f"❌ Error en monitor auto-checkin: {e}")
@@ -868,14 +901,14 @@ def cancelar_orden_api():
              
         # Si viene reserva_id, buscamos el order_id
         if reserva_id and not order_id:
-            from database import ReservaVuelo, get_db_session
             session = get_db_session()
-            reserva = session.query(ReservaVuelo).get(reserva_id)
-            if not reserva or not reserva.order_id_duffel:
+            try:
+                reserva = session.query(ReservaVuelo).get(reserva_id)
+                if not reserva or not reserva.order_id_duffel:
+                    return jsonify({'error': 'Reserva u Order ID no encontrado'}), 404
+                order_id = reserva.order_id_duffel
+            finally:
                 session.close()
-                return jsonify({'error': 'Reserva u Order ID no encontrado'}), 404
-            order_id = reserva.order_id_duffel
-            session.close()
             
         if motor is None: return jsonify({'error': 'Motor no disponible'}), 503
         
@@ -887,12 +920,14 @@ def cancelar_orden_api():
             # Actualizar DB si fuera necesario
             if reserva_id:
                 session = get_db_session()
-                reserva = session.query(ReservaVuelo).get(reserva_id)
-                if reserva:
-                    reserva.estado = 'CANCELADO'
-                    reserva.notas = (reserva.notas or "") + f" | Cancelado en Duffel: {datetime.now()}"
-                    session.commit()
-                session.close()
+                try:
+                    reserva = session.query(ReservaVuelo).get(reserva_id)
+                    if reserva:
+                        reserva.estado = 'CANCELADO'
+                        reserva.notas = (reserva.notas or "") + f" | Cancelado en Duffel: {datetime.now()}"
+                        session.commit()
+                finally:
+                    session.close()
                 
             return jsonify(resultado)
         else:
@@ -929,7 +964,7 @@ def crear_reserva_vuelo():
             return jsonify({'error': 'Faltan datos requeridos'}), 400
 
         # Validación de edad por tipo de pasajero (regla negocio: adulto >=18, niño <18)
-        hoy = datetime.utcnow().date()
+        hoy = datetime.now(timezone.utc).date()
         for idx, pasajero in enumerate(pasajeros, start=1):
             tipo = str(pasajero.get('type', '')).strip().lower()
             born_on = str(pasajero.get('born_on', '')).strip()
@@ -966,10 +1001,25 @@ def crear_reserva_vuelo():
         codigo_reserva = f"FL{secrets.token_hex(4).upper()}"
         
         # Crear reserva en BD
-        from database import ReservaVuelo, get_db_session
         session = get_db_session()
         
         try:
+            # Extraer datos queryables del JSON
+            nombre = ''
+            if pasajeros and len(pasajeros) > 0:
+                p0 = pasajeros[0]
+                nombre = f"{p0.get('given_name', '')} {p0.get('family_name', '')}".strip()
+            fecha_ida_str = datos_vuelo.get('fecha_ida')
+            fecha_ida = None
+            if fecha_ida_str:
+                try:
+                    fecha_ida = datetime.strptime(fecha_ida_str, '%Y-%m-%d').date()
+                except (ValueError, TypeError):
+                    pass
+            # Primer segmento → número de vuelo
+            segmentos = datos_vuelo.get('segmentos_ida', datos_vuelo.get('segmentos', []))
+            num_vuelo = segmentos[0].get('vuelo') if segmentos else None
+
             reserva = ReservaVuelo(
                 codigo_reserva=codigo_reserva,
                 provider=proveedor.upper(),
@@ -977,10 +1027,14 @@ def crear_reserva_vuelo():
                 datos_vuelo=json.dumps(datos_vuelo),
                 pasajeros=json.dumps(pasajeros),
                 amadeus_full_offer=json.dumps(amadeus_offer) if amadeus_offer else None,
-                precio_vuelos=float(precio_total), # BD suele ser Float o Numeric
+                precio_vuelos=float(precio_total),
                 precio_total=float(precio_total),
+                nombre_cliente=nombre or None,
                 email_cliente=email_cliente,
                 telefono_cliente=telefono,
+                moneda=datos_vuelo.get('currency', 'EUR'),
+                fecha_vuelo_ida=fecha_ida,
+                numero_vuelo=num_vuelo,
                 estado='PENDIENTE' if proveedor == 'Duffel' else 'PENDIENTE_PAGO_AMADEUS',
                 es_viaje_redondo=bool(datos_vuelo.get('es_viaje_redondo')) and str(datos_vuelo.get('es_viaje_redondo')) != ""
             )
@@ -1020,6 +1074,7 @@ def confirmar_vuelo_directo():
     Confirma una reserva directamente usando el saldo de Duffel (Agency Balance).
     REQUIERE AUTENTICACIÓN.
     """
+    session = None
     try:
         data = request.json
         reserva_id = data.get('reserva_id')
@@ -1027,13 +1082,11 @@ def confirmar_vuelo_directo():
         if not reserva_id:
             return jsonify({'error': 'reserva_id requerido'}), 400
         
-        from database import ReservaVuelo, get_db_session
         session = get_db_session()
         
         reserva = session.query(ReservaVuelo).filter_by(id=reserva_id).first()
         
         if not reserva:
-            session.close()
             return jsonify({'error': 'Reserva no encontrada'}), 404
             
         reserva.estado = 'Procesando en Duffel...'
@@ -1049,24 +1102,11 @@ def confirmar_vuelo_directo():
 
         if motor is None:
             return jsonify({'error': 'Motor de búsqueda no disponible'}), 503
-            
-        # motor = MotorBusqueda() (YA GLOBAL)
         
-        # Estrategia: Crear orden 'hold' -> Pagar con Balance (Implícito si 'instant' y funds ok, o explicit payment)
-        # Para simplificar y dado que es Admin Directo con Duffel Balance:
-        # Usamos 'instant' con un payment dummy de tipo 'balance' si la API lo requiere,
-        # o simplemente confiamos en que Duffel deduce del balance si no hay payment method externo.
-        # Duffel API: Create Order -> payment required for instant.
-        # Payment object: { type: "balance", amount: "...", currency: "..." }
-        
-        # Necesitamos el monto exacto de la oferta + servicios.
-        # Lo mejor es obtenerlo de la oferta actualizada, pero usaremos el guardado si confiamos.
-        # Vamos a intentar recuperar el precio REAL de la oferta primero.
         offer_details = motor.get_offer_details(reserva.offer_id_duffel)
         if not offer_details:
-             # Fallback al precio guardado, esperando que no haya cambiado
              amount_str = str(reserva.precio_total)
-             currency = "EUR" # Asunción arriesgada, mejor del offer_details si fuera posible
+             currency = "EUR"
         else:
              amount_str = offer_details['total_amount']
              currency = offer_details['total_currency']
@@ -1081,7 +1121,7 @@ def confirmar_vuelo_directo():
             offer_id=reserva.offer_id_duffel,
             pasajeros_data=pasajeros_data,
             services=services,
-            type='instant',
+            order_type='instant',
             payments=payments_payload
         )
         
@@ -1090,10 +1130,10 @@ def confirmar_vuelo_directo():
             reserva.estado = 'CONFIRMADO'
             reserva.fecha_pago = datetime.now()
             reserva.fecha_confirmacion = datetime.now()
+            reserva.booking_reference = resultado['booking_reference']
             reserva.notas = f"Booking Ref: {resultado['booking_reference']} (Directo)"
             session.commit()
             
-            session.close()
             return jsonify({
                 'success': True,
                 'booking_reference': resultado['booking_reference']
@@ -1103,146 +1143,37 @@ def confirmar_vuelo_directo():
             reserva.estado = 'ERROR'
             reserva.error_mensaje = resultado['error']
             session.commit()
-            session.close()
             return jsonify({'success': False, 'error': resultado['error']}), 400
             
     except Exception as e:
         logger.error(f"❌ Excepción confirmar directo: {e}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        if session:
+            session.close()
 
 
 @app.route('/api/vuelos/payment-intent', methods=['POST'])
+@limiter.limit("5 per minute")
 def crear_payment_intent_duffel():
-    """Endpoint para crear un Payment Intent en Duffel"""
-    try:
-        data = request.json
-        amount = data.get('amount')
-        currency = data.get('currency')
-        
-        if not amount or not currency:
-            return jsonify({'error': 'Monto y moneda requeridos'}), 400
-            
-        if motor is None:
-            return jsonify({'error': 'Motor de búsqueda no disponible'}), 503
-
-        # motor = MotorBusqueda() (YA GLOBAL)
-        
-        resultado = motor.crear_payment_intent(Decimal(str(amount)), currency)
-
-        def _duffel_unavailable_feature(res):
-            if not res:
-                return False
-            error_raw = str(res.get('error') or '')
-            if 'unavailable_feature' in error_raw:
-                return True
-            try:
-                parsed = json.loads(error_raw)
-                errors = parsed.get('errors') or []
-                if errors:
-                    return str(errors[0].get('code', '')).strip().lower() == 'unavailable_feature'
-            except Exception:
-                pass
-            return False
-        
-        if resultado and resultado.get('success'):
-             data_intent = resultado['data']
-             intent_id = data_intent['id']
-
-             # ACTUALIZACIÓN IMPRESCINDIBLE: Guardar ID en la reserva
-             reserva_id = data.get('reserva_id')
-             if reserva_id:
-                 from database import ReservaVuelo, get_db_session
-                 session = get_db_session()
-                 reserva = session.query(ReservaVuelo).filter_by(id=reserva_id).first()
-                 if reserva:
-                     reserva.stripe_payment_intent_id = intent_id # Guardamos el ID de Duffel aquí
-                     session.commit()
-                     print(f"✅ Payment Intent {intent_id} guardado en reserva {reserva.codigo_reserva}")
-                 session.close()
-
-             return jsonify({'success': True, 'client_token': data_intent['client_token'], 'id': intent_id})
-        else:
-             if _duffel_unavailable_feature(resultado):
-                 reserva_id = data.get('reserva_id')
-                 redirect_url = '/'
-                 if reserva_id:
-                     from database import ReservaVuelo, get_db_session
-                     session = get_db_session()
-                     reserva = session.query(ReservaVuelo).filter_by(id=reserva_id).first()
-                     if reserva:
-                         reserva.estado = 'pendiente_pago'
-                         reserva.error_mensaje = 'Duffel Payments no disponible para esta cuenta. Pago manual requerido.'
-                         session.commit()
-                         redirect_url = f'/reserva/pendiente-pago/{reserva.codigo_reserva}'
-                     session.close()
-
-                 return jsonify({
-                     'success': True,
-                     'manual_payment': True,
-                     'reason': 'unavailable_feature',
-                     'redirect_url': redirect_url,
-                     'message': 'Duffel Payments no está habilitado para la cuenta. Continuando por pago manual.'
-                 })
-
-             error_msg = resultado.get('error') if resultado else 'Error desconocido creando Payment Intent'
-             return jsonify({'success': False, 'error': error_msg}), 400
-             
-    except Exception as e:
-        logger.error(f"❌ Error payment-intent endpoint: {e}")
-        return jsonify({'error': str(e)}), 500
+    """Endpoint legacy de Duffel Payments (deshabilitado)."""
+    return jsonify({
+        'success': False,
+        'error': 'Duffel Payments no está habilitado. Usa /api/vuelos/create-checkout-session (Stripe).'
+    }), 410
 
 @app.route('/api/vuelos/client-component-key', methods=['POST'])
 def get_duffel_component_key():
-    """Obtiene JWT para Duffel Components"""
-    try:
-        if motor is None:
-            return jsonify({'error': 'Motor de búsqueda no disponible'}), 503
-
-        # motor = MotorBusqueda() (YA GLOBAL)
-        resultado = motor.crear_client_component_key()
-
-        def _duffel_unavailable_feature(res):
-            if not res:
-                return False
-            error_raw = str(res.get('error') or '')
-            if 'unavailable_feature' in error_raw:
-                return True
-            try:
-                parsed = json.loads(error_raw)
-                errors = parsed.get('errors') or []
-                if errors:
-                    return str(errors[0].get('code', '')).strip().lower() == 'unavailable_feature'
-            except Exception:
-                pass
-            return False
-        
-        if resultado and resultado.get('success'):
-            client_key = (resultado.get('client_key') or '').strip()
-            if not client_key:
-                logger.error("❌ Duffel client-component-key vacío en endpoint")
-                return jsonify({'success': False, 'error': 'Duffel client key vacía'}), 502
-            return jsonify({'success': True, 'client_key': client_key})
-        else:
-            if _duffel_unavailable_feature(resultado):
-                return jsonify({
-                    'success': True,
-                    'manual_payment': True,
-                    'reason': 'unavailable_feature',
-                    'message': 'Duffel Payments no está habilitado para la cuenta. Continuando por pago manual.'
-                })
-
-            error_msg = resultado.get('error') if resultado else 'Error desconocido generating key'
-            logger.error(f"❌ Error obteniendo client-component-key: {error_msg}")
-            return jsonify({'success': False, 'error': error_msg}), 400
-            
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+    """Endpoint legacy de Duffel Components (deshabilitado)."""
+    return jsonify({
+        'success': False,
+        'error': 'Duffel Components no está habilitado. Usa Stripe checkout.'
+    }), 410
 
 @app.route('/orden/checkout/<codigo_reserva>')
 def checkout_page(codigo_reserva):
     """Página dedicada de pago para una reserva"""
     try:
-        from database import ReservaVuelo, get_db_session
         import json
         
         session = get_db_session()
@@ -1255,10 +1186,8 @@ def checkout_page(codigo_reserva):
         # PARSEO CRÍTICO: Convertir JSON strings a Objetos Python
         # Sin esto, Jinja ve strings y reserva.origen falla
         try:
-            if isinstance(reserva.datos_vuelo, str):
-                reserva.datos_vuelo = json.loads(reserva.datos_vuelo)
-            if isinstance(reserva.pasajeros, str):
-                reserva.pasajeros = json.loads(reserva.pasajeros)
+            reserva.datos_vuelo = _parse_datos_vuelo(reserva)
+            reserva.pasajeros = _parse_pasajeros(reserva)
         except Exception as e:
             logger.error(f"Error parseando JSON reserva: {e}")
 
@@ -1268,44 +1197,69 @@ def checkout_page(codigo_reserva):
                 return "Proveedor no disponible temporalmente", 404
 
             session = get_db_session()
-            reserva_db = session.query(ReservaVuelo).filter_by(id=reserva.id).first()
-            if reserva_db:
-                reserva_db.estado = 'pendiente_pago_amadeus'
-                reserva_db.notas = (reserva_db.notas or '') + ' | Checkout Amadeus: pago/confirmación fuera de Duffel Payments'
-                session.commit()
-            session.close()
+            try:
+                reserva_db = session.query(ReservaVuelo).filter_by(id=reserva.id).first()
+                if reserva_db:
+                    reserva_db.estado = 'pendiente_pago_amadeus'
+                    reserva_db.notas = (reserva_db.notas or '') + ' | Checkout Amadeus: pago/confirmación fuera de Duffel Payments'
+                    session.commit()
+            finally:
+                session.close()
             stripe_public_key = os.getenv('STRIPE_PUBLIC_KEY', '')
             return render_template('amadeus_checkout.html', reserva=reserva, stripe_public_key=stripe_public_key)
             
-        usar_pago_manual = os.getenv('PAYMENT_FLOW', 'duffel').lower() == 'manual' or not os.getenv('DUFFEL_API_TOKEN')
-        if usar_pago_manual:
-            session = get_db_session()
+
+        stripe_secret_key = os.getenv('STRIPE_SECRET_KEY', '').strip()
+        if not stripe_secret_key:
+            return "No se puede iniciar el pago: STRIPE_SECRET_KEY no configurada", 503
+
+        amount_cents = int(round(float(reserva.precio_total or 0) * 100))
+        if amount_cents <= 0:
+            return "No se puede iniciar el pago: importe inválido", 400
+
+        base_url = request.host_url.rstrip('/')
+        success_url = f"{base_url}/success?codigo_reserva={reserva.codigo_reserva}&session_id={{CHECKOUT_SESSION_ID}}"
+        cancel_url = f"{base_url}/orden/checkout/{reserva.codigo_reserva}"
+
+        stripe_resp = requests.post(
+            'https://api.stripe.com/v1/checkout/sessions',
+            auth=(stripe_secret_key, ''),
+            data={
+                'mode': 'payment',
+                'success_url': success_url,
+                'cancel_url': cancel_url,
+                'line_items[0][price_data][currency]': 'eur',
+                'line_items[0][price_data][product_data][name]': f"Reserva vuelo Duffel {reserva.codigo_reserva}",
+                'line_items[0][price_data][unit_amount]': str(amount_cents),
+                'line_items[0][quantity]': '1',
+                'client_reference_id': reserva.codigo_reserva,
+                'metadata[codigo_reserva]': reserva.codigo_reserva,
+                'metadata[proveedor]': 'duffel',
+                'automatic_tax[enabled]': 'false',
+            },
+            timeout=25
+        )
+
+        if stripe_resp.status_code >= 400:
+            logger.error(f"❌ Stripe Checkout Duffel error {stripe_resp.status_code}: {stripe_resp.text}")
+            return "No se pudo iniciar Stripe Checkout", 502
+
+        stripe_data = stripe_resp.json()
+        checkout_url = stripe_data.get('url')
+        if not checkout_url:
+            return "Stripe no devolvió URL de checkout", 502
+
+        session = get_db_session()
+        try:
             reserva_db = session.query(ReservaVuelo).filter_by(id=reserva.id).first()
             if reserva_db:
-                reserva_db.estado = 'pendiente_pago'
+                reserva_db.stripe_session_id = stripe_data.get('id')
+                reserva_db.estado = 'PENDIENTE_PAGO_STRIPE'
                 session.commit()
+        finally:
             session.close()
-            return render_template('pending_manual_payment.html', reserva=reserva)
 
-        rollout_bucket = get_rollout_bucket("checkout_multi_step", codigo_reserva)
-        checkout_multi_step_enabled = is_feature_enabled(
-            "checkout_multi_step",
-            seed=codigo_reserva,
-            percentage=CHECKOUT_MULTI_STEP_ROLLOUT_PERCENT,
-            enabled=CHECKOUT_MULTI_STEP_ENABLED
-        )
-        logger.info(
-            "Checkout multi-step %s (bucket=%s, rollout=%s%%) reserva=%s",
-            "ON" if checkout_multi_step_enabled else "OFF",
-            rollout_bucket,
-            CHECKOUT_MULTI_STEP_ROLLOUT_PERCENT,
-            codigo_reserva
-        )
-        return render_template(
-            'checkout.html',
-            reserva=reserva,
-            checkout_multi_step=checkout_multi_step_enabled
-        )
+        return redirect(checkout_url, code=303)
     except Exception as e:
         logger.error(f"Error checkout page: {e}")
         return "Error cargando checkout", 500
@@ -1313,173 +1267,103 @@ def checkout_page(codigo_reserva):
 @app.route('/api/vuelos/confirmar-pago', methods=['POST'])
 def confirmar_pago_tarjeta():
     """
-    Finaliza la reserva tras un pago exitoso con tarjeta (Duffel Component).
+    Endpoint legacy de Duffel Payments (deshabilitado).
     """
-    try:
-        data = request.json
-        reserva_id = data.get('reserva_id')
-        card_id = data.get('card_id') # Nuevo campo crucial
-        # Usar Decimal para precisión
-        amount = Decimal(str(data.get('amount')))
-        currency = data.get('currency')
-        
-        if not reserva_id:
-            return jsonify({'error': 'reserva_id requerido'}), 400
+    return jsonify({
+        'success': False,
+        'error': 'Duffel Payments no está habilitado. Usa Stripe checkout para completar esta reserva.'
+    }), 410
 
-        if not card_id:
-            return jsonify({'error': 'card_id requerido'}), 400
-            
-        from database import ReservaVuelo, get_db_session
+
+@app.route('/api/vuelos/create-checkout-session', methods=['POST'])
+@limiter.limit("10 per minute")
+def duffel_create_checkout_session():
+    """Crea una sesión de Stripe Checkout para reservas Duffel."""
+    session = None
+    try:
+        payload = request.json or {}
+        codigo_reserva = (payload.get('codigo_reserva') or '').strip()
+        if not codigo_reserva:
+            return jsonify({'error': 'codigo_reserva requerido'}), 400
+
+        stripe_secret_key = os.getenv('STRIPE_SECRET_KEY', '').strip()
+        if not stripe_secret_key:
+            return jsonify({'error': 'STRIPE_SECRET_KEY no configurada'}), 503
+
         session = get_db_session()
-        reserva = session.query(ReservaVuelo).filter_by(id=reserva_id).first()
-        
+        reserva = session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
         if not reserva:
-            session.close()
             return jsonify({'error': 'Reserva no encontrada'}), 404
 
         proveedor_reserva = 'Duffel'
         try:
-            datos_vuelo_tmp = json.loads(reserva.datos_vuelo) if isinstance(reserva.datos_vuelo, str) else (reserva.datos_vuelo or {})
+            datos_vuelo_tmp = _parse_datos_vuelo(reserva)
             proveedor_reserva = str(datos_vuelo_tmp.get('source', 'Duffel'))
         except Exception:
             proveedor_reserva = 'Duffel'
 
         if proveedor_reserva != 'Duffel':
-            session.close()
-            return jsonify({
-                'error': 'Esta reserva pertenece a Amadeus y no se confirma con Duffel Payments',
-                'provider': proveedor_reserva,
-                'manual_payment': True,
-                'redirect_url': f'/reserva/pendiente-pago/{reserva.codigo_reserva}'
-            }), 400
-            
-        payment_intent_id = reserva.stripe_payment_intent_id
-        if not payment_intent_id:
-            reserva.estado = 'pendiente_pago'
-            reserva.error_mensaje = 'Duffel Payment Intent no disponible. Pago manual requerido.'
-            session.commit()
-            codigo_reserva = reserva.codigo_reserva
-            session.close()
-            return jsonify({'success': True, 'manual_payment': True, 'redirect_url': f'/reserva/pendiente-pago/{codigo_reserva}'})
+            return jsonify({'error': 'Esta ruta es solo para reservas Duffel'}), 400
 
-        reserva.estado = 'Confirmando Pago...'
-        session.commit()
-        
-        # from core.scraper_motor import MotorBusqueda (YA GLOBAL)
-        # motor = MotorBusqueda() (YA GLOBAL)
-        
-        # 1. COBRAR (Confirm Payment Intent)
-        confirm_result = motor.confirmar_payment_intent(payment_intent_id, card_id)
+        amount_cents = int(round(float(reserva.precio_total or 0) * 100))
+        if amount_cents <= 0:
+            return jsonify({'error': 'Monto inválido para checkout'}), 400
 
-        if not confirm_result['success']:
-            reserva.estado = 'pendiente_pago'
-            reserva.error_mensaje = f"Fallo cobro Duffel. Pago manual requerido: {confirm_result.get('error')}"
-            session.commit()
-            codigo_reserva = reserva.codigo_reserva
-            session.close()
-            return jsonify({'success': True, 'manual_payment': True, 'redirect_url': f'/reserva/pendiente-pago/{codigo_reserva}'})
+        base_url = request.host_url.rstrip('/')
+        success_url = f"{base_url}/success?codigo_reserva={reserva.codigo_reserva}&session_id={{CHECKOUT_SESSION_ID}}"
+        cancel_url = f"{base_url}/orden/checkout/{reserva.codigo_reserva}"
 
-        # 2. CREAR ORDER (Funded by Balance/Payment)
-        pasajeros_data = json.loads(reserva.pasajeros)
-        datos_vuelo_obj = json.loads(reserva.datos_vuelo)
-        services = datos_vuelo_obj.get('services')
-
-        # Usar importe real del offer en Duffel para evitar desajustes (422)
-        amount_order = amount
-        currency_order = currency
-        try:
-            offer_details = motor.get_offer_details(reserva.offer_id_duffel)
-            if offer_details:
-                offer_amount = offer_details.get('total_amount')
-                offer_currency = offer_details.get('total_currency')
-                if offer_amount:
-                    amount_order = Decimal(str(offer_amount))
-                if offer_currency:
-                    currency_order = str(offer_currency).upper()
-                logger.info(
-                    f"💵 Monto order desde Duffel offer: {amount_order} {currency_order} (reserva={reserva.codigo_reserva})"
-                )
-            else:
-                logger.warning(
-                    f"⚠️ No se pudo obtener offer_details para {reserva.offer_id_duffel}. Usando monto local {amount_order} {currency_order}"
-                )
-        except Exception as e_offer:
-            logger.warning(
-                f"⚠️ Error obteniendo monto real de offer {reserva.offer_id_duffel}: {e_offer}. Usando monto local {amount_order} {currency_order}"
-            )
-
-        # Payment Block for Order
-        # Como Duffel requiere payments para 'instant', usamos 'balance' 
-        # asumiendo que el payment intent anterior recargó el balance o está linkado.
-        # Nota: Duffel Payments crea un Payment Intent, al confirmarlo el dinero va a tu balance Duffel.
-        # Por tanto, pagamos la orden con 'balance'.
-        payments_payload = [{
-            "type": "balance",
-            "amount": f"{Decimal(str(amount_order)):.2f}",
-            "currency": currency_order
-        }]
-
-        resultado = motor.crear_order_duffel(
-            offer_id=reserva.offer_id_duffel,
-            pasajeros_data=pasajeros_data,
-            services=services,
-            type='instant',
-            payments=payments_payload
+        stripe_resp = requests.post(
+            'https://api.stripe.com/v1/checkout/sessions',
+            auth=(stripe_secret_key, ''),
+            data={
+                'mode': 'payment',
+                'success_url': success_url,
+                'cancel_url': cancel_url,
+                'line_items[0][price_data][currency]': 'eur',
+                'line_items[0][price_data][product_data][name]': f"Reserva vuelo Duffel {reserva.codigo_reserva}",
+                'line_items[0][price_data][unit_amount]': str(amount_cents),
+                'line_items[0][quantity]': '1',
+                'client_reference_id': reserva.codigo_reserva,
+                'metadata[codigo_reserva]': reserva.codigo_reserva,
+                'metadata[proveedor]': 'duffel',
+                'automatic_tax[enabled]': 'false',
+            },
+            timeout=25
         )
-        
-        if resultado['success']:
-            reserva.order_id_duffel = resultado['order_id']
-            reserva.estado = 'CONFIRMADO'
-            reserva.fecha_pago = datetime.now()
-            reserva.fecha_confirmacion = datetime.now()
-            reserva.notas = f"Booking Ref: {resultado['booking_reference']} (Pago Tarjeta Exitoso)"
-            session.commit()
-            session.close()
-            
-            logger.info(f"✅ Vuelo confirmado con tarjeta: {resultado['booking_reference']}")
-            
-            # 3. ENVIAR EMAIL DE CONFIRMACIÓN (Automation)
-            try:
-                email_manager.send_order_confirmation(
-                    to_email=reserva.email_cliente,
-                    booking_ref=resultado['booking_reference'],
-                    amount=amount,
-                    currency=currency
-                )
-            except Exception as e_mail:
-                logger.error(f"⚠️ Error enviando email: {e_mail}")
 
-            return jsonify({
-                'success': True,
-                'booking_reference': resultado['booking_reference']
-            })
-        else:
-            reserva.estado = 'pendiente_pago'
-            reserva.error_mensaje = f"Pago confirmado, emisión pendiente manual: {resultado['error']}"
-            session.commit()
-            codigo_reserva = reserva.codigo_reserva
-            session.close()
-            return jsonify({'success': True, 'manual_payment': True, 'redirect_url': f'/reserva/pendiente-pago/{codigo_reserva}'})
-            
+        if stripe_resp.status_code >= 400:
+            logger.error(f"❌ Stripe Checkout Duffel error {stripe_resp.status_code}: {stripe_resp.text}")
+            return jsonify({'error': 'No se pudo crear la sesión de pago'}), 502
+
+        stripe_data = stripe_resp.json()
+        reserva.stripe_session_id = stripe_data.get('id')
+        reserva.estado = 'PENDIENTE_PAGO_STRIPE'
+        session.commit()
+
+        return jsonify({'success': True, 'url': stripe_data.get('url')})
+
     except Exception as e:
-        logger.error(f"❌ Excepción confirmar pago tarjeta: {e}")
+        logger.error(f"❌ Error creando checkout Duffel: {e}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        if session:
+            session.close()
 
 @app.route('/reserva/pendiente-pago/<codigo_reserva>')
 def reserva_pendiente_pago(codigo_reserva):
     """Pantalla de confirmación con pago manual por transferencia."""
+    session = None
     try:
-        from database import ReservaVuelo, get_db_session
 
         session = get_db_session()
         reserva = session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
         if not reserva:
-            session.close()
             return "Reserva no encontrada", 404
 
         proveedor_reserva = 'Duffel'
         try:
-            datos_vuelo_tmp = json.loads(reserva.datos_vuelo) if isinstance(reserva.datos_vuelo, str) else (reserva.datos_vuelo or {})
+            datos_vuelo_tmp = _parse_datos_vuelo(reserva)
             proveedor_reserva = str(datos_vuelo_tmp.get('source', 'Duffel'))
         except Exception:
             proveedor_reserva = 'Duffel'
@@ -1487,22 +1371,23 @@ def reserva_pendiente_pago(codigo_reserva):
         reserva.estado = 'pendiente_pago_amadeus' if proveedor_reserva != 'Duffel' else 'pendiente_pago'
         session.commit()
 
-        if isinstance(reserva.datos_vuelo, str):
-            reserva.datos_vuelo = json.loads(reserva.datos_vuelo)
-        if isinstance(reserva.pasajeros, str):
-            reserva.pasajeros = json.loads(reserva.pasajeros)
+        reserva.datos_vuelo = _parse_datos_vuelo(reserva)
+        reserva.pasajeros = _parse_pasajeros(reserva)
 
-        session.close()
         return render_template('pending_manual_payment.html', reserva=reserva)
     except Exception as e:
         logger.error(f"Error en pendiente pago manual: {e}")
         return "Error cargando estado de reserva", 500
+    finally:
+        if session:
+            session.close()
 
 
 @app.route('/api/amadeus/create-checkout-session', methods=['POST'])
 @limiter.limit("10 per minute")
 def amadeus_create_checkout_session():
     """Crea una sesión Stripe Checkout para reservas de Amadeus."""
+    session = None
     try:
         if not AMADEUS_ENABLED:
             return jsonify({'error': 'Amadeus deshabilitado temporalmente'}), 404
@@ -1516,27 +1401,23 @@ def amadeus_create_checkout_session():
         if not stripe_secret_key:
             return jsonify({'error': 'STRIPE_SECRET_KEY no configurada'}), 503
 
-        from database import ReservaVuelo, get_db_session
         session = get_db_session()
         reserva = session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
         if not reserva:
-            session.close()
             return jsonify({'error': 'Reserva no encontrada'}), 404
 
         try:
-            datos_vuelo = json.loads(reserva.datos_vuelo) if isinstance(reserva.datos_vuelo, str) else (reserva.datos_vuelo or {})
+            datos_vuelo = _parse_datos_vuelo(reserva)
         except Exception:
             datos_vuelo = {}
 
         proveedor = str(datos_vuelo.get('source', 'Duffel'))
         proveedor_meta = proveedor.lower()
         if proveedor == 'Duffel':
-            session.close()
             return jsonify({'error': 'Esta ruta es solo para reservas Amadeus'}), 400
 
         amount_cents = int(round(float(reserva.precio_total or 0) * 100))
         if amount_cents <= 0:
-            session.close()
             return jsonify({'error': 'Monto inválido para checkout'}), 400
 
         base_url = request.host_url.rstrip('/')
@@ -1563,7 +1444,6 @@ def amadeus_create_checkout_session():
         )
 
         if stripe_resp.status_code >= 400:
-            session.close()
             logger.error(f"❌ Stripe Checkout error {stripe_resp.status_code}: {stripe_resp.text}")
             return jsonify({'error': 'No se pudo crear la sesión de pago'}), 502
 
@@ -1571,29 +1451,30 @@ def amadeus_create_checkout_session():
         reserva.stripe_session_id = stripe_data.get('id')
         reserva.estado = 'PAGADO_PENDIENTE_EMISION'
         session.commit()
-        session.close()
 
         return jsonify({'success': True, 'url': stripe_data.get('url')})
 
     except Exception as e:
         logger.error(f"❌ Error creando checkout Amadeus: {e}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        if session:
+            session.close()
 
 
 @app.route('/reserva/amadeus/pago-exito/<codigo_reserva>')
 def amadeus_pago_exito(codigo_reserva):
     """Marca reserva Amadeus como pagada y pendiente de emisión manual."""
+    session = None
     try:
         if not AMADEUS_ENABLED:
             return "Amadeus deshabilitado temporalmente", 404
 
         session_id = (request.args.get('session_id') or '').strip()
-        from database import ReservaVuelo, get_db_session
 
         session = get_db_session()
         reserva = session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
         if not reserva:
-            session.close()
             return "Reserva no encontrada", 404
 
         reserva.estado = 'PAGADO_PENDIENTE_EMISION'
@@ -1603,16 +1484,131 @@ def amadeus_pago_exito(codigo_reserva):
             reserva.stripe_session_id = session_id
         session.commit()
 
-        if isinstance(reserva.datos_vuelo, str):
-            reserva.datos_vuelo = json.loads(reserva.datos_vuelo)
-        if isinstance(reserva.pasajeros, str):
-            reserva.pasajeros = json.loads(reserva.pasajeros)
+        reserva.datos_vuelo = _parse_datos_vuelo(reserva)
+        reserva.pasajeros = _parse_pasajeros(reserva)
 
-        session.close()
         return render_template('pending_manual_payment.html', reserva=reserva)
     except Exception as e:
         logger.error(f"❌ Error en pago éxito Amadeus: {e}")
         return "Error confirmando pago", 500
+    finally:
+        if session:
+            session.close()
+
+
+def _notify_duffel_balance_issue(reserva, error_text):
+    """Notifica al equipo cuando falla una emisión Duffel por balance insuficiente."""
+    try:
+        alert_to = (
+            os.getenv('DUFFEL_BALANCE_ALERT_EMAIL')
+            or os.getenv('ADMIN_EMAIL')
+            or os.getenv('SMTP_USER')
+            or ''
+        ).strip()
+        if not alert_to:
+            logger.warning("⚠️ No hay email de alerta configurado para incidencias de balance Duffel")
+            return False
+
+        subject = f"🚨 Duffel Balance insuficiente - {reserva.codigo_reserva}"
+        body = f"""
+        <html>
+            <body style='font-family: Arial, sans-serif;'>
+                <h2>Reserva pagada en Stripe sin emisión en Duffel</h2>
+                <p><strong>Código:</strong> {reserva.codigo_reserva}</p>
+                <p><strong>Cliente:</strong> {reserva.email_cliente}</p>
+                <p><strong>Importe:</strong> {reserva.precio_total} {reserva.moneda or 'EUR'}</p>
+                <p><strong>Error Duffel:</strong> {error_text}</p>
+                <p><strong>Acción:</strong> Recargar balance en Duffel y reintentar emisión desde admin.</p>
+            </body>
+        </html>
+        """
+        return email_manager.send_email(alert_to, subject, body)
+    except Exception as e:
+        logger.error(f"❌ Error enviando alerta de balance Duffel: {e}")
+        return False
+
+
+def _emitir_reserva_duffel_balance(reserva, session, stripe_session_id=None):
+    """Intenta emitir una reserva Duffel usando balance de agencia."""
+    if motor is None:
+        reserva.estado = 'ERROR'
+        reserva.error_mensaje = 'Motor de búsqueda no disponible para emisión Duffel'
+        session.commit()
+        return {'success': False, 'error': reserva.error_mensaje}
+
+    if stripe_session_id:
+        reserva.stripe_session_id = stripe_session_id
+
+    reserva.estado = 'PAGADO'
+    reserva.fecha_pago = reserva.fecha_pago or datetime.now()
+    session.commit()
+
+    pasajeros_data = json.loads(reserva.pasajeros)
+    datos_vuelo_obj = json.loads(reserva.datos_vuelo)
+    services = datos_vuelo_obj.get('services')
+
+    amount_order = Decimal(str(reserva.precio_total))
+    currency_order = 'EUR'
+    try:
+        offer_details = motor.get_offer_details(reserva.offer_id_duffel)
+        if offer_details:
+            offer_amount = offer_details.get('total_amount')
+            offer_currency = offer_details.get('total_currency')
+            if offer_amount:
+                amount_order = Decimal(str(offer_amount))
+            if offer_currency:
+                currency_order = str(offer_currency).upper()
+    except Exception as e_offer:
+        logger.warning(
+            f"⚠️ No se pudo obtener monto real del offer {reserva.offer_id_duffel}: {e_offer}. "
+            f"Se usa monto local {amount_order} {currency_order}"
+        )
+
+    payments_payload = [{
+        "type": "balance",
+        "amount": f"{Decimal(str(amount_order)):.2f}",
+        "currency": currency_order
+    }]
+
+    resultado = motor.crear_order_duffel(
+        offer_id=reserva.offer_id_duffel,
+        pasajeros_data=pasajeros_data,
+        services=services,
+        order_type='instant',
+        payments=payments_payload
+    )
+
+    if resultado.get('success'):
+        reserva.order_id_duffel = resultado.get('order_id')
+        reserva.booking_reference = resultado.get('booking_reference')
+        reserva.estado = 'CONFIRMADO'
+        reserva.fecha_confirmacion = datetime.now()
+        reserva.notas = (
+            (reserva.notas or '') +
+            f" | Stripe OK session={stripe_session_id or reserva.stripe_session_id or 'n/a'} "
+            f"| Duffel booking={resultado.get('booking_reference', 'n/a')}"
+        )
+        reserva.error_mensaje = None
+        session.commit()
+
+        try:
+            email_manager.send_flight_tickets(reserva, resultado.get('order_data', {}))
+        except Exception as e_mail:
+            logger.error(f"⚠️ Error enviando email de billetes Duffel: {e_mail}")
+
+        return {'success': True, 'booking_reference': reserva.booking_reference}
+
+    error_text = str(resultado.get('error') or '')
+    error_lower = error_text.lower()
+    if 'balance' in error_lower and ('insufficient' in error_lower or 'insuficiente' in error_lower):
+        reserva.estado = 'PAGADO_SIN_BALANCE_DUFFEL'
+        _notify_duffel_balance_issue(reserva, error_text)
+    else:
+        reserva.estado = 'ERROR'
+    reserva.error_mensaje = f"Pago Stripe OK, error emitiendo Duffel: {error_text}"
+    session.commit()
+    logger.error(f"❌ Error emitiendo Duffel para {reserva.codigo_reserva}: {error_text}")
+    return {'success': False, 'error': error_text}
 
 
 @app.route('/webhook/stripe', methods=['POST'])
@@ -1658,7 +1654,44 @@ def stripe_webhook():
 
         logger.info(f"📨 Webhook Stripe recibido: {event_type}")
 
-        from database import ReservaVuelo, get_db_session
+        if event_type == 'checkout.session.completed':
+            checkout_obj = event.get('data', {}).get('object', {})
+            session_id = checkout_obj.get('id')
+            payment_status = checkout_obj.get('payment_status')
+            metadata = checkout_obj.get('metadata', {}) or {}
+
+            codigo_reserva = metadata.get('codigo_reserva')
+            proveedor = (metadata.get('proveedor', '') or '').lower()
+
+            if proveedor != 'duffel' or not codigo_reserva:
+                return jsonify({'status': 'ok'}), 200
+
+            logger.info(
+                f"💳 Stripe checkout Duffel completado: session={session_id} reserva={codigo_reserva} status={payment_status}"
+            )
+
+            if payment_status != 'paid':
+                logger.warning(f"⚠️ Checkout Duffel no pagado para {codigo_reserva}: {payment_status}")
+                return jsonify({'status': 'ok'}), 200
+
+            session = get_db_session()
+            try:
+                reserva = session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
+                if not reserva:
+                    logger.warning(f"❌ Reserva Duffel {codigo_reserva} no encontrada")
+                    return jsonify({'status': 'ok'}), 200
+
+                if reserva.estado == 'CONFIRMADO' and reserva.order_id_duffel:
+                    logger.info(f"ℹ️ Reserva {codigo_reserva} ya confirmada (idempotente)")
+                    return jsonify({'status': 'ok'}), 200
+
+                _emitir_reserva_duffel_balance(reserva, session, stripe_session_id=session_id)
+
+            finally:
+                session.close()
+
+            return jsonify({'status': 'ok'}), 200
+
 
         if event_type == 'payment_intent.succeeded':
             # Obtener datos del intent
@@ -1679,27 +1712,25 @@ def stripe_webhook():
 
             # Buscar reserva
             session = get_db_session()
-            reserva = session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
-            
-            if not reserva:
-                logger.warning(f"❌ Reserva {codigo_reserva} no encontrada")
+            try:
+                reserva = session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
+                
+                if not reserva:
+                    logger.warning(f"❌ Reserva {codigo_reserva} no encontrada")
+                    return jsonify({'error': 'Reserva no encontrada'}), 404
+
+                # Verificar que esté en estado correcto
+                if reserva.estado != 'PAGADO_PENDIENTE_EMISION':
+                    logger.warning(f"⚠️ Reserva {codigo_reserva} ya procesada o en estado {reserva.estado}")
+                    return jsonify({'status': 'ok'}), 200
+
+                # Iniciar emisión automática en background
+                threading.Thread(
+                    target=_emitir_amadeus_background,
+                    args=(codigo_reserva, reserva, session)
+                ).start()
+            finally:
                 session.close()
-                return jsonify({'error': 'Reserva no encontrada'}), 404
-
-            # Verificar que esté en estado correcto
-            if reserva.estado != 'PAGADO_PENDIENTE_EMISION':
-                logger.warning(f"⚠️ Reserva {codigo_reserva} ya procesada o en estado {reserva.estado}")
-                session.close()
-                return jsonify({'status': 'ok'}), 200
-
-            # Iniciar emisión automática en background
-            threading.Thread(
-                target=_emitir_amadeus_background,
-                args=(codigo_reserva, reserva, session)
-            ).start()
-
-            session.close()
-            return jsonify({'status': 'ok'}), 200
 
         elif event_type == 'payment_intent.payment_failed':
             intent_obj = event.get('data', {}).get('object', {})
@@ -1712,11 +1743,13 @@ def stripe_webhook():
             # Actualizar estado a error si aplica
             if codigo_reserva:
                 session = get_db_session()
-                reserva = session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
-                if reserva:
-                    reserva.notas = (reserva.notas or '') + f" | Pago Stripe falló: {intent_id}"
-                    session.commit()
-                session.close()
+                try:
+                    reserva = session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
+                    if reserva:
+                        reserva.notas = (reserva.notas or '') + f" | Pago Stripe falló: {intent_id}"
+                        session.commit()
+                finally:
+                    session.close()
 
             return jsonify({'status': 'ok'}), 200
 
@@ -1725,6 +1758,56 @@ def stripe_webhook():
     except Exception as e:
         logger.error(f"❌ Error en webhook Stripe: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/vuelos/retry-balance-emission', methods=['POST'])
+@login_required
+@limiter.limit("20 per hour")
+def reintentar_emision_balance_duffel():
+    """Reintenta emisión Duffel usando balance para reservas ya pagadas."""
+    session = None
+    try:
+        payload = request.json or {}
+        codigo_reserva = (payload.get('codigo_reserva') or '').strip()
+        reserva_id = payload.get('reserva_id')
+
+        if not codigo_reserva and not reserva_id:
+            return jsonify({'error': 'codigo_reserva o reserva_id requerido'}), 400
+
+        session = get_db_session()
+        query = session.query(ReservaVuelo)
+        reserva = query.filter_by(codigo_reserva=codigo_reserva).first() if codigo_reserva else query.filter_by(id=reserva_id).first()
+
+        if not reserva:
+            return jsonify({'error': 'Reserva no encontrada'}), 404
+
+        if reserva.order_id_duffel and reserva.estado == 'CONFIRMADO':
+            return jsonify({'success': True, 'message': 'Reserva ya confirmada', 'booking_reference': reserva.booking_reference}), 200
+
+        allowed_states = {'PAGADO', 'PAGADO_SIN_BALANCE_DUFFEL', 'ERROR', 'PENDIENTE_PAGO_STRIPE'}
+        if reserva.estado not in allowed_states:
+            return jsonify({'error': f'Estado no apto para reintento: {reserva.estado}'}), 400
+
+        result = _emitir_reserva_duffel_balance(reserva, session, stripe_session_id=reserva.stripe_session_id)
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'booking_reference': reserva.booking_reference,
+                'estado': reserva.estado
+            }), 200
+
+        return jsonify({
+            'success': False,
+            'error': result.get('error', 'Error de emisión'),
+            'estado': reserva.estado
+        }), 409
+
+    except Exception as e:
+        logger.error(f"❌ Error reintentando emisión Duffel por balance: {e}")
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if session:
+            session.close()
 
 
 def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
@@ -1740,10 +1823,9 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
         logger.info(f"🎫 Iniciando emisión automática para {codigo_reserva}")
 
         # Recargar reserva en nueva sesión (importante para threading)
-        from database import ReservaVuelo, get_db_session as get_new_session
         from core.email_utils import EmailManager
 
-        new_session = get_new_session()
+        new_session = get_db_session()
         reserva = new_session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
 
         if not reserva:
@@ -1753,12 +1835,12 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
 
         # Parsear JSON si es necesario
         try:
-            datos_vuelo = json.loads(reserva.datos_vuelo) if isinstance(reserva.datos_vuelo, str) else (reserva.datos_vuelo or {})
+            datos_vuelo = _parse_datos_vuelo(reserva)
         except Exception:
             datos_vuelo = {}
 
         try:
-            pasajeros = json.loads(reserva.pasajeros) if isinstance(reserva.pasajeros, str) else (reserva.pasajeros or [])
+            pasajeros = _parse_pasajeros(reserva)
         except Exception:
             pasajeros = []
 
@@ -1772,7 +1854,7 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
 
         # Obtener la oferta completa (debe estar guardada)
         try:
-            amadeus_full_offer = json.loads(reserva.amadeus_full_offer) if isinstance(reserva.amadeus_full_offer, str) else reserva.amadeus_full_offer
+            amadeus_full_offer = _parse_json_field(reserva.amadeus_full_offer)
         except Exception:
             amadeus_full_offer = None
 
@@ -2204,7 +2286,7 @@ def reservar_tour_api():
         if data.get('fecha'):
             try:
                 fecha_pref = datetime.strptime(data['fecha'], '%d/%m/%Y')
-            except:
+            except (ValueError, TypeError):
                 pass
 
         nueva_solicitud = SolicitudTour(
@@ -2279,8 +2361,8 @@ def api_buscar_tours():
     Query params: search, continente, pais, proveedor, precio_max, duracion_min, 
                   duracion_max, tipo, sort, page, per_page
     """
+    db = None
     try:
-        from database import get_db_session, Tour
         from sqlalchemy import or_, and_
         
         db = get_db_session()
@@ -2379,12 +2461,6 @@ def api_buscar_tours():
         
         tours = query.offset((page - 1) * per_page).limit(per_page).all()
         
-        # Incrementar contador de visitas para cada tour mostrado
-        # (opcional, descomenta si quieres tracking)
-        # for tour in tours:
-        #     tour.num_visitas += 1
-        # db.commit()
-        
         result = {
             'tours': [t.to_dict() for t in tours],
             'total': total_tours,
@@ -2395,12 +2471,14 @@ def api_buscar_tours():
             'has_prev': page > 1
         }
         
-        db.close()
         return jsonify(result)
         
     except Exception as e:
         logger.error(f"Error en API buscar tours: {e}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        if db:
+            db.close()
 
 
 @app.route('/api/tours/<int:tour_id>/completo', methods=['GET'])
@@ -2408,14 +2486,13 @@ def api_tour_completo(tour_id):
     """
     Obtiene detalles completos de un tour específico incluyendo salidas
     """
+    db = None
     try:
-        from database import get_db_session, Tour
         
         db = get_db_session()
         tour = db.get(Tour, tour_id)
         
         if not tour:
-            db.close()
             return jsonify({'error': 'Tour no encontrado'}), 404
         
         # Incrementar contador de visitas
@@ -2425,12 +2502,14 @@ def api_tour_completo(tour_id):
         # Serializar con salidas incluidas
         result = tour.to_dict(include_salidas=True)
         
-        db.close()
         return jsonify(result)
         
     except Exception as e:
         logger.error(f"Error obteniendo tour {tour_id}: {e}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        if db:
+            db.close()
 
 
 @app.route('/api/tours/destacados', methods=['GET'])
@@ -2439,8 +2518,8 @@ def api_tours_destacados():
     Obtiene tours destacados para la página principal
     Query param: limit (default 6)
     """
+    db = None
     try:
-        from database import get_db_session, Tour
         
         db = get_db_session()
         
@@ -2461,12 +2540,14 @@ def api_tours_destacados():
             'total': len(tours)
         }
         
-        db.close()
         return jsonify(result)
         
     except Exception as e:
         logger.error(f"Error obteniendo tours destacados: {e}")
         return jsonify({'error': str(e)}), 500
+    finally:
+        if db:
+            db.close()
 
 
 @app.route('/api/tours/filtros-disponibles', methods=['GET'])
@@ -2476,7 +2557,6 @@ def api_filtros_disponibles():
     Útil para poblar el sidebar de filtros con counts
     """
     try:
-        from database import get_db_session, Tour
         from sqlalchemy import func
         
         db = get_db_session()
@@ -2649,7 +2729,6 @@ def home():
     
     # Obtener 6 tours aleatorios para la portada (Grid principal)
     try:
-        from database import get_db_session, Tour
         from sqlalchemy.sql.expression import func
         import html
         
@@ -2698,12 +2777,13 @@ def home():
             tours_destacados_clean.append(d)
         
         tours_destacados = tours_destacados_clean
-        
-        db.close()
     except Exception as e:
         logger.error(f"Error cargando home: {e}")
         viajes = []
         tours_destacados = []
+    finally:
+        if db:
+            db.close()
     
     return render_template('index.html', viajes=viajes, tours_destacados=tours_destacados)
 
@@ -2714,59 +2794,63 @@ def legal():
 
 from sqlalchemy.sql.expression import func
 
+
+def _build_tour_filters(db, base_query=None):
+    """Construye estructuras de filtros para catálogo de tours."""
+    if base_query is None:
+        base_query = db.query(Tour).filter(Tour.activo == True)
+
+    filtros = {}
+
+    continentes = (
+        base_query
+        .filter(Tour.continente.isnot(None))
+        .with_entities(Tour.continente, func.count(Tour.id).label('count'))
+        .group_by(Tour.continente)
+        .all()
+    )
+    filtros['continentes'] = [{'nombre': c[0], 'count': c[1]} for c in continentes if c[0]]
+
+    proveedores = (
+        base_query
+        .filter(Tour.proveedor.isnot(None))
+        .with_entities(Tour.proveedor, func.count(Tour.id).label('count'))
+        .group_by(Tour.proveedor)
+        .order_by(func.count(Tour.id).desc())
+        .limit(12)
+        .all()
+    )
+    filtros['proveedores'] = [{'nombre': p[0], 'count': p[1]} for p in proveedores if p[0]]
+
+    tipos = (
+        base_query
+        .filter(Tour.tipo_viaje.isnot(None))
+        .with_entities(Tour.tipo_viaje, func.count(Tour.id).label('count'))
+        .group_by(Tour.tipo_viaje)
+        .all()
+    )
+    filtros['tipos'] = [{'nombre': t[0], 'count': t[1]} for t in tipos if t[0]]
+
+    filtros['precio_max'] = int(base_query.with_entities(func.max(Tour.precio_desde)).scalar() or 5000)
+    filtros['duracion_max'] = int(base_query.with_entities(func.max(Tour.duracion_dias)).scalar() or 30)
+    filtros['total_tours'] = int(base_query.with_entities(func.count(Tour.id)).scalar() or 0)
+    return filtros
+
 @app.route('/destinos')
 def destinos():
     """Página de Destinos: Proporciona datos para filtros"""
+    db = None
     try:
-        from database import get_db_session, Tour
-        from sqlalchemy import func
-        
         db = get_db_session()
-        
-        # Obtener estadísticas para filtros
-        filtros = {}
-        
-        # Continentes
-        continentes = db.query(
-            Tour.continente,
-            func.count(Tour.id).label('count')
-        ).filter(
-            Tour.activo == True,
-            Tour.continente.isnot(None)
-        ).group_by(Tour.continente).all()
-        filtros['continentes'] = [{'nombre': c[0], 'count': c[1]} for c in continentes]
-        
-        # Proveedores top 10
-        proveedores = db.query(
-            Tour.proveedor,
-            func.count(Tour.id).label('count')
-        ).filter(
-            Tour.activo == True,
-            Tour.proveedor.isnot(None)
-        ).group_by(Tour.proveedor).order_by(func.count(Tour.id).desc()).limit(10).all()
-        filtros['proveedores'] = [{'nombre': p[0], 'count': p[1]} for p in proveedores]
-        
-        # Tipos de viaje
-        tipos = db.query(
-            Tour.tipo_viaje,
-            func.count(Tour.id).label('count')
-        ).filter(
-            Tour.activo == True,
-            Tour.tipo_viaje.isnot(None)
-        ).group_by(Tour.tipo_viaje).all()
-        filtros['tipos'] = [{'nombre': t[0], 'count': t[1]} for t in tipos]
-        
-        # Rangos
-        filtros['precio_max'] = int(db.query(func.max(Tour.precio_desde)).scalar() or 5000)
-        filtros['duracion_max'] = int(db.query(func.max(Tour.duracion_dias)).scalar() or 30)
-        filtros['total_tours'] = db.query(Tour).filter_by(activo=True).count()
-        
-        db.close()
+        filtros = _build_tour_filters(db)
         
     except Exception as e:
         logger.error(f"Error en destinos: {e}")
         filtros = {'continentes': [], 'proveedores': [], 'tipos': [], 
                   'precio_max': 5000, 'duracion_max': 30, 'total_tours': 0}
+    finally:
+        if db:
+            db.close()
     
     return render_template('destinos.html', filtros=filtros)
 
@@ -2774,8 +2858,10 @@ def destinos():
 def cruceros():
     """Página de Cruceros: Filtra por categoría o título"""
     viajes = []
+    db = None
     try:
         db = get_db_session()
+        filtros = _build_tour_filters(db)
         # Filtrar por palabras clave de cruceros
         viajes = db.query(Tour).filter(
             Tour.activo == True,
@@ -2786,27 +2872,37 @@ def cruceros():
             (Tour.titulo.ilike('%royal%'))
         ).all()
         viajes = [v.to_dict() for v in viajes]
-        db.close()
     except Exception as e:
         logger.error(f"Error en cruceros: {e}")
-    return render_template('cruceros.html', viajes=viajes)
+        filtros = {'continentes': [], 'proveedores': [], 'tipos': [],
+                  'precio_max': 5000, 'duracion_max': 30, 'total_tours': 0}
+    finally:
+        if db:
+            db.close()
+    return render_template('cruceros.html', viajes=viajes, filtros=filtros)
 
 @app.route('/ofertas')
 def ofertas():
     """Página de Ofertas: Muestra viajes marcados como oferta o baratos"""
     viajes = []
+    db = None
     try:
         db = get_db_session()
+        filtros = _build_tour_filters(db)
         # Lógica simple: si precio < 500 o tiene etiqueta oferta (si existiera)
         viajes = db.query(Tour).filter(
             Tour.activo == True,
             Tour.precio_desde < 800
         ).order_by(Tour.precio_desde.asc()).limit(20).all()
         viajes = [v.to_dict() for v in viajes]
-        db.close()
     except Exception as e:
         logger.error(f"Error en ofertas: {e}")
-    return render_template('ofertas.html', viajes=viajes)
+        filtros = {'continentes': [], 'proveedores': [], 'tipos': [],
+                  'precio_max': 5000, 'duracion_max': 30, 'total_tours': 0}
+    finally:
+        if db:
+            db.close()
+    return render_template('ofertas.html', viajes=viajes, filtros=filtros)
 
 @app.route('/contacto')
 def contacto():
@@ -2830,7 +2926,7 @@ def _extract_checkin_open_datetime(reserva):
         return None
 
     try:
-        datos = json.loads(reserva.datos_vuelo) if isinstance(reserva.datos_vuelo, str) else reserva.datos_vuelo
+        datos = _parse_datos_vuelo(reserva)
         if not isinstance(datos, dict):
             return None
 
@@ -2866,7 +2962,7 @@ def _extract_checkin_open_datetime(reserva):
 
 def _normalize_passengers_for_checkin(reserva):
     try:
-        raw = json.loads(reserva.pasajeros) if reserva and reserva.pasajeros else []
+        raw = _parse_pasajeros(reserva) if reserva else []
     except Exception:
         raw = []
 
@@ -2939,7 +3035,7 @@ def _resolve_airline_checkin_url(reserva):
     code = None
 
     try:
-        datos = json.loads(reserva.datos_vuelo) if isinstance(reserva.datos_vuelo, str) else reserva.datos_vuelo
+        datos = _parse_datos_vuelo(reserva)
         if isinstance(datos, dict):
             code = datos.get('airline_iata') or datos.get('aerolinea_iata')
     except Exception:
@@ -2964,27 +3060,27 @@ def success():
         checkin_date = None
         
         if reserva_id:
-            from database import ReservaVuelo, get_db_session
             db = get_db_session()
-            reserva = db.query(ReservaVuelo).filter_by(id=reserva_id).first()
-            
-            if reserva:
-                if reserva.notas and 'Booking Ref:' in reserva.notas:
-                    booking_ref = reserva.notas.split('Booking Ref: ')[1].strip()
+            try:
+                reserva = db.query(ReservaVuelo).filter_by(id=reserva_id).first()
                 
-                # Calculate check-in date (24h before flight)
-                try:
-                    if reserva.datos_vuelo:
-                        datos = json.loads(reserva.datos_vuelo)
-                        fecha_ida = datos.get('fecha_ida') # YYYY-MM-DD
-                        if fecha_ida:
-                            flight_date = datetime.strptime(fecha_ida, '%Y-%m-%d')
-                            checkin_open = flight_date - timedelta(hours=24)
-                            checkin_date = checkin_open.strftime('%d/%m/%Y a las %H:%M')
-                except Exception as ex:
-                    logger.warning(f"Error calculando fecha checkin: {ex}")
-
-            db.close()
+                if reserva:
+                    if reserva.notas and 'Booking Ref:' in reserva.notas:
+                        booking_ref = reserva.notas.split('Booking Ref: ')[1].strip()
+                    
+                    # Calculate check-in date (24h before flight)
+                    try:
+                        if reserva.datos_vuelo:
+                            datos = json.loads(reserva.datos_vuelo)
+                            fecha_ida = datos.get('fecha_ida') # YYYY-MM-DD
+                            if fecha_ida:
+                                flight_date = datetime.strptime(fecha_ida, '%Y-%m-%d')
+                                checkin_open = flight_date - timedelta(hours=24)
+                                checkin_date = checkin_open.strftime('%d/%m/%Y a las %H:%M')
+                    except Exception as ex:
+                        logger.warning(f"Error calculando fecha checkin: {ex}")
+            finally:
+                db.close()
 
         if os.path.exists('templates/success.html'):
             return render_template('success.html', booking_ref=booking_ref, checkin_date=checkin_date)
@@ -3008,16 +3104,27 @@ def success():
 @app.route('/api/vuelos/save-identity', methods=['POST'])
 def save_identity():
     """Guarda los datos de pasaporte/DNI en Duffel para auto-checkin."""
+    db = None
     try:
+        if motor is None:
+            return render_template(
+                'checkin.html',
+                booking_ref=None,
+                codigo_reserva=None,
+                checkin_date=None,
+                checkin_url=None,
+                pasajeros=[],
+                message="⚠️ El servicio de auto-checkin no está disponible temporalmente.",
+                message_type="error"
+            )
+
         data = request.form
         codigo_reserva = (data.get('codigo_reserva') or '').strip().upper()
         
-        from database import ReservaVuelo, get_db_session
         db = get_db_session()
         reserva = db.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
         
         if not reserva:
-            db.close()
             return "Reserva no encontrada", 404
 
         booking_ref = _extract_booking_reference(reserva)
@@ -3052,9 +3159,8 @@ def save_identity():
             
         if results and all(results):
             reserva.estado = 'LISTO PARA CHECK-IN'
-            reserva.notas = f"[AUTO_CHECKIN] Documentación verificada el {datetime.utcnow().strftime('%d/%m/%Y %H:%M')} UTC. {reserva.notas or ''}".strip()
+            reserva.notas = f"[AUTO_CHECKIN] Documentación verificada el {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M')} UTC. {reserva.notas or ''}".strip()
             db.commit()
-            db.close()
 
             return render_template(
                 'checkin.html',
@@ -3063,10 +3169,10 @@ def save_identity():
                 checkin_date=checkin_date,
                 checkin_url=checkin_url,
                 pasajeros=pasajeros,
-                error="✅ Datos guardados. Te avisaremos automáticamente cuando se abra el check-in."
+                message="✅ Datos guardados. Te avisaremos automáticamente cuando se abra el check-in.",
+                message_type="success"
             )
         else:
-            db.close()
             return render_template(
                 'checkin.html',
                 booking_ref=booking_ref,
@@ -3074,12 +3180,16 @@ def save_identity():
                 checkin_date=checkin_date,
                 checkin_url=checkin_url,
                 pasajeros=pasajeros,
-                error="⚠️ No se pudieron guardar los datos de identidad. Verifica los campos e inténtalo otra vez."
+                message="⚠️ No se pudieron guardar los datos de identidad. Verifica los campos e inténtalo otra vez.",
+                message_type="error"
             )
             
     except Exception as e:
         logger.error(f"Error saving identity: {e}")
         return "Error interno", 500
+    finally:
+        if db:
+            db.close()
 
 @app.route('/checkin', methods=['GET', 'POST'])
 def checkin():
@@ -3088,59 +3198,74 @@ def checkin():
     codigo_reserva = None
     checkin_date = None
     checkin_url = None
-    error = None
+    message = None
+    message_type = None
 
     if request.method == 'POST':
         codigo_reserva = request.form.get('codigo_reserva', '').strip().upper()
         email = request.form.get('email', '').strip()
 
         if not codigo_reserva or not email:
-            error = "Por favor, introduce el código de reserva y el email."
+            message = "Por favor, introduce el código de reserva y el email."
+            message_type = "error"
         else:
             try:
-                from database import ReservaVuelo, get_db_session
                 db = get_db_session()
-                # Buscar por código y email por seguridad
-                reserva = db.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva, email_cliente=email).first()
-                
-                if not reserva:
-                    error = "No se ha encontrado ninguna reserva con esos datos."
-                else:
-                    codigo_reserva = reserva.codigo_reserva
-                    booking_ref = _extract_booking_reference(reserva)
-                    checkin_url = _resolve_airline_checkin_url(reserva)
-                    if booking_ref:
-                        booking_ref = booking_ref.strip()
+                try:
+                    # Buscar por código y email por seguridad
+                    reserva = db.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva, email_cliente=email).first()
+                    
+                    if not reserva:
+                        message = "No se ha encontrado ninguna reserva con esos datos."
+                        message_type = "error"
                     else:
-                        error = "Tu reserva está confirmada pero aún no tenemos el localizador de la aerolínea. Por favor, revisa tu email."
+                        codigo_reserva = reserva.codigo_reserva
+                        booking_ref = _extract_booking_reference(reserva)
+                        checkin_url = _resolve_airline_checkin_url(reserva)
+                        if booking_ref:
+                            booking_ref = booking_ref.strip()
+                        else:
+                            message = "Tu reserva está confirmada pero aún no tenemos el localizador de la aerolínea. Por favor, revisa tu email."
+                            message_type = "error"
 
-                    # Calcular fecha check-in
-                    if booking_ref:
-                         try:
-                            checkin_open = _extract_checkin_open_datetime(reserva)
-                            if checkin_open:
-                                checkin_date = checkin_open.strftime('%d/%m/%Y a las %H:%M')
+                        # Calcular fecha check-in
+                        if booking_ref:
+                             try:
+                                checkin_open = _extract_checkin_open_datetime(reserva)
+                                if checkin_open:
+                                    checkin_date = checkin_open.strftime('%d/%m/%Y a las %H:%M')
 
-                            pasajeros = _normalize_passengers_for_checkin(reserva)
+                                pasajeros = _normalize_passengers_for_checkin(reserva)
 
-                            db.close()
-                            return render_template(
-                                'checkin.html',
-                                booking_ref=booking_ref,
-                                codigo_reserva=codigo_reserva,
-                                pasajeros=pasajeros,
-                                checkin_url=checkin_url,
-                                checkin_date=checkin_date
-                            )
-                         except Exception as ex:
-                            logger.warning(f"Error calculando fecha checkin: {ex}")
-
-                db.close()
+                                return render_template(
+                                    'checkin.html',
+                                    booking_ref=booking_ref,
+                                    codigo_reserva=codigo_reserva,
+                                    pasajeros=pasajeros,
+                                    checkin_url=checkin_url,
+                                    checkin_date=checkin_date,
+                                    message=message,
+                                    message_type=message_type
+                                )
+                             except Exception as ex:
+                                logger.warning(f"Error calculando fecha checkin: {ex}")
+                finally:
+                    db.close()
             except Exception as e:
                 logger.error(f"Error en checkin lookup: {e}")
-                error = "Ha ocurrido un error al buscar tu reserva. Inténtalo de nuevo."
+                message = "Ha ocurrido un error al buscar tu reserva. Inténtalo de nuevo."
+                message_type = "error"
 
-    return render_template('checkin.html', booking_ref=booking_ref, codigo_reserva=codigo_reserva, checkin_date=checkin_date, checkin_url=checkin_url, error=error)
+    return render_template(
+        'checkin.html',
+        booking_ref=booking_ref,
+        codigo_reserva=codigo_reserva,
+        checkin_date=checkin_date,
+        checkin_url=checkin_url,
+        message=message,
+        message_type=message_type,
+        pasajeros=[]
+    )
 
 @app.route('/api/manage-booking', methods=['GET', 'POST'])
 def manage_booking_portal():
@@ -3152,21 +3277,21 @@ def manage_booking_portal():
     codigo = request.form.get('codigo', '').strip().upper()
     email = request.form.get('email', '').strip()
     
-    from database import ReservaVuelo, get_db_session
     db = get_db_session()
-    reserva = db.query(ReservaVuelo).filter_by(codigo_reserva=codigo, email_cliente=email).first()
-    
-    if not reserva:
-        db.close()
-        return render_template('manage_booking_login.html', error="Reserva no encontrada.")
+    try:
+        reserva = db.query(ReservaVuelo).filter_by(codigo_reserva=codigo, email_cliente=email).first()
+        
+        if not reserva:
+            return render_template('manage_booking_login.html', error="Reserva no encontrada.")
 
-    # Pasar al portal real con los datos
-    order_id = reserva.order_id_duffel
-    db.close()
-    return render_template('manage_booking.html', 
-                          booking_ref=codigo, 
-                          order_id=order_id,
-                          reserva_id=reserva.id)
+        # Pasar al portal real con los datos
+        order_id = reserva.order_id_duffel
+        return render_template('manage_booking.html', 
+                              booking_ref=codigo, 
+                              order_id=order_id,
+                              reserva_id=reserva.id)
+    finally:
+        db.close()
 
 @app.route('/api/vuelos/order/<order_id>/add-baggage')
 def manage_baggage(order_id):
@@ -3295,52 +3420,51 @@ def my_admin():
         
         conn.close()
 
-        from database import DuffelSearch, ReservaVuelo, get_db_session
         from sqlalchemy import func, desc
 
         db = get_db_session()
+        try:
+            duffel_busquedas = db.query(DuffelSearch).order_by(
+                DuffelSearch.fecha_creacion.desc()
+            ).limit(20).all()
 
-        duffel_busquedas = db.query(DuffelSearch).order_by(
-            DuffelSearch.fecha_creacion.desc()
-        ).limit(20).all()
+            top_origenes = db.query(
+                DuffelSearch.origen,
+                func.count(DuffelSearch.id).label('count')
+            ).filter(
+                DuffelSearch.origen.isnot(None)
+            ).group_by(DuffelSearch.origen).order_by(desc('count')).limit(10).all()
 
-        top_origenes = db.query(
-            DuffelSearch.origen,
-            func.count(DuffelSearch.id).label('count')
-        ).filter(
-            DuffelSearch.origen.isnot(None)
-        ).group_by(DuffelSearch.origen).order_by(desc('count')).limit(10).all()
+            top_destinos = db.query(
+                DuffelSearch.destino,
+                func.count(DuffelSearch.id).label('count')
+            ).filter(
+                DuffelSearch.destino.isnot(None)
+            ).group_by(DuffelSearch.destino).order_by(desc('count')).limit(10).all()
 
-        top_destinos = db.query(
-            DuffelSearch.destino,
-            func.count(DuffelSearch.id).label('count')
-        ).filter(
-            DuffelSearch.destino.isnot(None)
-        ).group_by(DuffelSearch.destino).order_by(desc('count')).limit(10).all()
+            top_rutas = db.query(
+                DuffelSearch.origen,
+                DuffelSearch.destino,
+                func.count(DuffelSearch.id).label('count')
+            ).filter(
+                DuffelSearch.origen.isnot(None),
+                DuffelSearch.destino.isnot(None)
+            ).group_by(DuffelSearch.origen, DuffelSearch.destino).order_by(desc('count')).limit(10).all()
 
-        top_rutas = db.query(
-            DuffelSearch.origen,
-            DuffelSearch.destino,
-            func.count(DuffelSearch.id).label('count')
-        ).filter(
-            DuffelSearch.origen.isnot(None),
-            DuffelSearch.destino.isnot(None)
-        ).group_by(DuffelSearch.origen, DuffelSearch.destino).order_by(desc('count')).limit(10).all()
+            duffel_reservas = db.query(ReservaVuelo).order_by(
+                ReservaVuelo.fecha_creacion.desc()
+            ).limit(50).all()
 
-        duffel_reservas = db.query(ReservaVuelo).order_by(
-            ReservaVuelo.fecha_creacion.desc()
-        ).limit(50).all()
-
-        total_busquedas = db.query(func.count(DuffelSearch.id)).scalar() or 0
-        total_reservas = db.query(func.count(ReservaVuelo.id)).scalar() or 0
-        total_confirmadas = db.query(func.count(ReservaVuelo.id)).filter(
-            ReservaVuelo.estado == 'CONFIRMADO'
-        ).scalar() or 0
-        total_canceladas = db.query(func.count(ReservaVuelo.id)).filter(
-            ReservaVuelo.estado == 'CANCELADO'
-        ).scalar() or 0
-
-        db.close()
+            total_busquedas = db.query(func.count(DuffelSearch.id)).scalar() or 0
+            total_reservas = db.query(func.count(ReservaVuelo.id)).scalar() or 0
+            total_confirmadas = db.query(func.count(ReservaVuelo.id)).filter(
+                ReservaVuelo.estado == 'CONFIRMADO'
+            ).scalar() or 0
+            total_canceladas = db.query(func.count(ReservaVuelo.id)).filter(
+                ReservaVuelo.estado == 'CANCELADO'
+            ).scalar() or 0
+        finally:
+            db.close()
 
         duffel_stats = {
             'total_busquedas': total_busquedas,
@@ -3389,8 +3513,8 @@ def descargar_factura(id_factura):
 @requires_auth
 def my_admin_cancel_duffel(reserva_id):
     """Cancela una reserva Duffel desde el panel"""
+    session = None
     try:
-        from database import ReservaVuelo, get_db_session
 
         if motor is None:
             return "Motor de busqueda no disponible", 503
@@ -3399,7 +3523,6 @@ def my_admin_cancel_duffel(reserva_id):
         reserva = session.query(ReservaVuelo).filter_by(id=reserva_id).first()
 
         if not reserva or not reserva.order_id_duffel:
-            session.close()
             return "Reserva no encontrada", 404
 
         resultado = motor.cancelar_orden(reserva.order_id_duffel)
@@ -3410,14 +3533,15 @@ def my_admin_cancel_duffel(reserva_id):
             session.commit()
         else:
             session.rollback()
-            session.close()
             return f"Error cancelando: {resultado.get('error', 'desconocido')}", 400
 
-        session.close()
         return redirect(url_for('my_admin'))
     except Exception as e:
         logger.error(f"Error cancelando reserva Duffel {reserva_id}: {e}")
         return "Error interno", 500
+    finally:
+        if session:
+            session.close()
 
 @app.route('/admin/data')
 @login_required
@@ -3475,7 +3599,6 @@ def admin_data():
         
         # ==== SQLALCHEMY DATABASE ====
         try:
-            from database import get_db_session, Tour, Pedido, SolicitudTour, Usuario
             db = get_db_session()
             
             # TOURS
@@ -3531,7 +3654,6 @@ def admin_data():
 # ==========================================
 
 try:
-    from database import get_db_session, Tour, SolicitudTour, Pedido, Usuario, ReservaVuelo, init_db
     from core.email_service import email_service
     from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -3723,13 +3845,13 @@ try:
             
             # Parse JSON fields
             try:
-                datos_vuelo = json.loads(reserva.datos_vuelo) if reserva.datos_vuelo else {}
-            except:
+                datos_vuelo = _parse_datos_vuelo(reserva)
+            except (ValueError, TypeError, json.JSONDecodeError):
                 datos_vuelo = {}
             
             try:
-                pasajeros_list = json.loads(reserva.pasajeros) if reserva.pasajeros else []
-            except:
+                pasajeros_list = _parse_pasajeros(reserva)
+            except (ValueError, TypeError, json.JSONDecodeError):
                 pasajeros_list = []
             
             return render_template('admin_reserva_detalle.html',
@@ -3966,14 +4088,306 @@ try:
         finally:
             db.close()
 
-    @app.route('/admin/tours')
+    @app.route('/admin/tours', methods=['GET', 'POST'])
     @login_required
     def admin_tours():
-        """Gestión de tours"""
+        """Gestión de tours con plantilla de alta manual."""
         db = get_db_session()
         try:
+            success_message = None
+            error_message = None
+            form_data = {}
+            editing_tour = None
+
+            def _is_present(value):
+                if value is None:
+                    return False
+                if isinstance(value, str):
+                    return value.strip() != ''
+                if isinstance(value, (list, tuple, set, dict)):
+                    return len(value) > 0
+                return True
+
+            def _parse_float(value, field_name):
+                if value is None or str(value).strip() == '':
+                    return None
+                try:
+                    return float(str(value).strip().replace(',', '.'))
+                except ValueError:
+                    raise ValueError(f"{field_name} debe ser numérico")
+
+            def _parse_int(value, field_name):
+                if value is None or str(value).strip() == '':
+                    return None
+                try:
+                    return int(str(value).strip())
+                except ValueError:
+                    raise ValueError(f"{field_name} debe ser entero")
+
+            def _tour_to_form_data(tour_obj):
+                salidas_sorted = sorted(list(tour_obj.salidas or []), key=lambda salida: salida.fecha_salida or datetime.max.date())
+                dias_disponibles = ", ".join(
+                    salida.fecha_salida.strftime('%Y-%m-%d')
+                    for salida in salidas_sorted
+                    if salida.fecha_salida
+                )
+                plazas_totales = salidas_sorted[0].plazas_totales if salidas_sorted else 0
+                return {
+                    'tour_id': str(tour_obj.id),
+                    'imagen_url': tour_obj.imagen_url or '',
+                    'titulo': tour_obj.titulo or '',
+                    'duracion_dias': str(tour_obj.duracion_dias or ''),
+                    'precio_desde': str(tour_obj.precio_desde or ''),
+                    'precio_hasta': str(tour_obj.precio_hasta or ''),
+                    'ciudad_salida': tour_obj.ciudad_salida or '',
+                    'origen': tour_obj.origen or '',
+                    'destino': tour_obj.destino or '',
+                    'dias_disponibles': dias_disponibles,
+                    'plazas_totales': str(plazas_totales),
+                    'tipo_viaje': tour_obj.tipo_viaje or '',
+                    'nivel_confort': tour_obj.nivel_confort or '',
+                    'categoria': tour_obj.categoria or '',
+                    'proveedor': tour_obj.proveedor or 'manual_admin',
+                    'continente': tour_obj.continente or '',
+                    'pais': tour_obj.pais or '',
+                    'temporada_inicio': tour_obj.temporada_inicio or '',
+                    'temporada_fin': tour_obj.temporada_fin or '',
+                    'descripcion': tour_obj.descripcion or '',
+                    'itinerario': tour_obj.itinerario or '',
+                    'incluye': tour_obj.incluye or '',
+                    'no_incluye': tour_obj.no_incluye or '',
+                    'keywords': tour_obj.keywords or '',
+                    'slug': tour_obj.slug or '',
+                    'destacado': 'on' if tour_obj.destacado else '',
+                    'activo': 'on' if tour_obj.activo else '',
+                }
+
+            edit_id = (request.args.get('edit_id') or '').strip()
+            if request.method == 'GET' and edit_id:
+                try:
+                    edit_id_int = int(edit_id)
+                    editing_tour = db.query(Tour).filter_by(id=edit_id_int).first()
+                    if editing_tour:
+                        form_data = _tour_to_form_data(editing_tour)
+                except ValueError:
+                    error_message = 'ID de tour inválido para edición'
+
+            if request.method == 'POST':
+                form_data = request.form.to_dict(flat=True)
+                tour_id_raw = (form_data.get('tour_id') or '').strip()
+                tour_to_update = None
+                if tour_id_raw:
+                    try:
+                        tour_id = int(tour_id_raw)
+                    except ValueError:
+                        raise ValueError('ID de tour inválido')
+                    tour_to_update = db.query(Tour).filter_by(id=tour_id).first()
+                    if not tour_to_update:
+                        raise ValueError('Tour no encontrado para edición')
+                    editing_tour = tour_to_update
+
+                titulo = (form_data.get('titulo') or '').strip()
+                if not titulo:
+                    raise ValueError('El nombre del tour es obligatorio')
+
+                duracion_dias = _parse_int(form_data.get('duracion_dias'), 'Duración')
+                if not duracion_dias or duracion_dias <= 0:
+                    raise ValueError('La duración debe ser mayor que 0')
+
+                precio_desde = _parse_float(form_data.get('precio_desde'), 'Precio')
+                if precio_desde is None or precio_desde <= 0:
+                    raise ValueError('El precio debe ser mayor que 0')
+
+                precio_hasta = _parse_float(form_data.get('precio_hasta'), 'Precio hasta')
+                if precio_hasta is None:
+                    precio_hasta = precio_desde
+
+                ciudad_salida = (form_data.get('ciudad_salida') or '').strip()
+                if not ciudad_salida:
+                    raise ValueError('La ciudad de salida es obligatoria')
+
+                slug_base_raw = (form_data.get('slug') or titulo).strip().lower()
+                slug_base = re.sub(r'[^a-z0-9]+', '-', slug_base_raw).strip('-') or f"tour-{int(time.time())}"
+                slug = slug_base
+                slug_index = 2
+                while True:
+                    existing_slug = db.query(Tour).filter(Tour.slug == slug).first()
+                    if not existing_slug:
+                        break
+                    if tour_to_update and existing_slug.id == tour_to_update.id:
+                        break
+                    slug = f"{slug_base}-{slug_index}"
+                    slug_index += 1
+
+                if tour_to_update:
+                    tour = tour_to_update
+                    tour.titulo = titulo
+                    tour.descripcion = (form_data.get('descripcion') or '').strip() or None
+                    tour.destino = (form_data.get('destino') or '').strip() or None
+                    tour.origen = (form_data.get('origen') or ciudad_salida).strip() or ciudad_salida
+                    tour.precio_desde = precio_desde
+                    tour.precio_hasta = precio_hasta
+                    tour.duracion_dias = duracion_dias
+                    tour.imagen_url = (form_data.get('imagen_url') or '').strip() or None
+                    tour.proveedor = (form_data.get('proveedor') or 'manual_admin').strip()
+                    tour.categoria = (form_data.get('categoria') or '').strip() or None
+                    tour.continente = (form_data.get('continente') or '').strip() or None
+                    tour.pais = (form_data.get('pais') or '').strip() or None
+                    tour.ciudad_salida = ciudad_salida
+                    tour.tipo_viaje = (form_data.get('tipo_viaje') or '').strip() or None
+                    tour.nivel_confort = (form_data.get('nivel_confort') or '').strip() or None
+                    tour.temporada_inicio = (form_data.get('temporada_inicio') or '').strip() or None
+                    tour.temporada_fin = (form_data.get('temporada_fin') or '').strip() or None
+                    tour.incluye = (form_data.get('incluye') or '').strip() or None
+                    tour.no_incluye = (form_data.get('no_incluye') or '').strip() or None
+                    tour.itinerario = (form_data.get('itinerario') or '').strip() or None
+                    tour.keywords = (form_data.get('keywords') or '').strip() or None
+                    tour.slug = slug
+                    tour.destacado = form_data.get('destacado') == 'on'
+                    tour.activo = form_data.get('activo') == 'on'
+                else:
+                    tour = Tour(
+                        titulo=titulo,
+                        descripcion=(form_data.get('descripcion') or '').strip() or None,
+                        destino=(form_data.get('destino') or '').strip() or None,
+                        origen=(form_data.get('origen') or ciudad_salida).strip() or ciudad_salida,
+                        precio_desde=precio_desde,
+                        precio_hasta=precio_hasta,
+                        duracion_dias=duracion_dias,
+                        imagen_url=(form_data.get('imagen_url') or '').strip() or None,
+                        proveedor=(form_data.get('proveedor') or 'manual_admin').strip(),
+                        categoria=(form_data.get('categoria') or '').strip() or None,
+                        continente=(form_data.get('continente') or '').strip() or None,
+                        pais=(form_data.get('pais') or '').strip() or None,
+                        ciudad_salida=ciudad_salida,
+                        tipo_viaje=(form_data.get('tipo_viaje') or '').strip() or None,
+                        nivel_confort=(form_data.get('nivel_confort') or '').strip() or None,
+                        temporada_inicio=(form_data.get('temporada_inicio') or '').strip() or None,
+                        temporada_fin=(form_data.get('temporada_fin') or '').strip() or None,
+                        incluye=(form_data.get('incluye') or '').strip() or None,
+                        no_incluye=(form_data.get('no_incluye') or '').strip() or None,
+                        itinerario=(form_data.get('itinerario') or '').strip() or None,
+                        keywords=(form_data.get('keywords') or '').strip() or None,
+                        slug=slug,
+                        destacado=form_data.get('destacado') == 'on',
+                        activo=form_data.get('activo') == 'on'
+                    )
+                    db.add(tour)
+                    db.flush()
+
+                dias_disponibles_raw = (form_data.get('dias_disponibles') or '').strip()
+                plazas_totales = _parse_int(form_data.get('plazas_totales'), 'Plazas totales') or 0
+
+                if tour_to_update:
+                    db.query(SalidaTour).filter(SalidaTour.tour_id == tour.id).delete(synchronize_session=False)
+
+                if dias_disponibles_raw:
+                    invalid_dates = []
+                    date_tokens = [token.strip() for token in re.split(r'[,;\n]+', dias_disponibles_raw) if token.strip()]
+                    for token in date_tokens:
+                        parsed_date = None
+                        for fmt in ('%Y-%m-%d', '%d/%m/%Y'):
+                            try:
+                                parsed_date = datetime.strptime(token, fmt).date()
+                                break
+                            except ValueError:
+                                continue
+                        if not parsed_date:
+                            invalid_dates.append(token)
+                            continue
+
+                        db.add(SalidaTour(
+                            tour_id=tour.id,
+                            fecha_salida=parsed_date,
+                            plazas_totales=plazas_totales,
+                            plazas_vendidas=0,
+                            estado='abierta'
+                        ))
+
+                    if invalid_dates:
+                        raise ValueError(
+                            "Fechas inválidas en días disponibles: " + ", ".join(invalid_dates) +
+                            ". Usa YYYY-MM-DD o DD/MM/YYYY"
+                        )
+
+                db.commit()
+                success_message = (
+                    f"Tour actualizado correctamente: {tour.titulo}"
+                    if tour_to_update else
+                    f"Tour creado correctamente: {tour.titulo}"
+                )
+                form_data = {}
+                editing_tour = None
+
             tours = db.query(Tour).order_by(Tour.fecha_actualizacion.desc()).all()
-            return render_template('admin_tours.html', tours=tours)
+
+            suggestion_definitions = [
+                ('descripcion', 'Descripción comercial'),
+                ('imagen_url', 'Foto principal'),
+                ('incluye', 'Lista de incluidos'),
+                ('no_incluye', 'Lista de no incluidos'),
+                ('itinerario', 'Itinerario día a día'),
+                ('keywords', 'Keywords de búsqueda SEO'),
+                ('temporada_inicio', 'Temporada inicio'),
+                ('temporada_fin', 'Temporada fin'),
+                ('tipo_viaje', 'Tipo de viaje'),
+                ('nivel_confort', 'Nivel de confort'),
+            ]
+
+            total_tours = len(tours)
+            tour_suggestions = []
+            if total_tours > 0:
+                for field_name, label in suggestion_definitions:
+                    filled_count = sum(1 for tour_item in tours if _is_present(getattr(tour_item, field_name, None)))
+                    completion = filled_count / total_tours
+                    if completion < 0.80:
+                        tour_suggestions.append(
+                            f"{label}: solo {int(round(completion * 100))}% de tours lo tienen completo"
+                        )
+
+                tours_with_salidas = sum(1 for tour_item in tours if getattr(tour_item, 'salidas', None))
+                salidas_completion = tours_with_salidas / total_tours
+                if salidas_completion < 0.80:
+                    tour_suggestions.append(
+                        f"Fechas de salida/plazas: solo {int(round(salidas_completion * 100))}% de tours tienen salidas cargadas"
+                    )
+
+            return render_template(
+                'admin_tours.html',
+                tours=tours,
+                success_message=success_message,
+                error_message=error_message,
+                form_data=form_data,
+                tour_suggestions=tour_suggestions,
+                editing_tour=editing_tour
+            )
+
+        except ValueError as value_error:
+            db.rollback()
+            tours = db.query(Tour).order_by(Tour.fecha_actualizacion.desc()).all()
+            return render_template(
+                'admin_tours.html',
+                tours=tours,
+                success_message=None,
+                error_message=str(value_error),
+                form_data=request.form.to_dict(flat=True) if request.method == 'POST' else {},
+                tour_suggestions=[],
+                editing_tour=editing_tour
+            )
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"❌ Error en admin_tours: {e}")
+            tours = db.query(Tour).order_by(Tour.fecha_actualizacion.desc()).all()
+            return render_template(
+                'admin_tours.html',
+                tours=tours,
+                success_message=None,
+                error_message='Error interno guardando el tour',
+                form_data=request.form.to_dict(flat=True) if request.method == 'POST' else {},
+                tour_suggestions=[],
+                editing_tour=editing_tour
+            )
 
         finally:
             db.close()
@@ -4063,8 +4477,11 @@ try:
         """Crea el usuario administrador inicial"""
         db = get_db_session()
         try:
-            username = os.getenv('ADMIN_USERNAME', 'admin')
-            password = os.getenv('ADMIN_PASSWORD', 'admin123')
+            username = os.getenv('ADMIN_USER', 'admin')
+            password = os.getenv('ADMIN_PASSWORD')
+            if not password:
+                print("❌ ADMIN_PASSWORD no configurado en .env")
+                return
             email = os.getenv('ADMIN_EMAIL', 'admin@agencia.com')
 
             usuario_existente = db.query(Usuario).filter_by(username=username).first()
@@ -4099,6 +4516,83 @@ except ImportError as e:
     logger.warning(f"⚠️ Módulos de tours no disponibles: {e}")
 except Exception as e:
     logger.error(f"❌ Error cargando sistema de tours: {e}")
+
+# ==========================================
+# 9.5 REGISTRO DE BLUEPRINTS NUEVOS
+# ==========================================
+
+# A) Área de Clientes (registro, login, dashboard, reservas, RGPD)
+try:
+    from blueprints.clientes import clientes_bp, init_clientes_blueprint
+    init_clientes_blueprint()
+    app.register_blueprint(clientes_bp)
+    logger.info("✅ Blueprint de Clientes registrado (área de cliente)")
+except Exception as e:
+    logger.warning(f"⚠️ No se pudo cargar blueprint de clientes: {e}")
+
+# B) Admin API v2 (dashboard KPIs, analytics, reembolsos, audit)
+try:
+    from blueprints.admin_api import admin_api_bp, init_admin_api_blueprint
+    init_admin_api_blueprint()
+    app.register_blueprint(admin_api_bp)
+    logger.info("✅ Blueprint Admin API v2 registrado")
+except Exception as e:
+    logger.warning(f"⚠️ No se pudo cargar blueprint Admin API v2: {e}")
+
+# C) SEO & Compliance (sitemap, robots.txt, legal pages, cookie consent)
+try:
+    from core.seo_compliance import seo_bp, init_seo_blueprint
+    init_seo_blueprint()
+    app.register_blueprint(seo_bp)
+    logger.info("✅ Blueprint SEO & Compliance registrado")
+except Exception as e:
+    logger.warning(f"⚠️ No se pudo cargar blueprint SEO: {e}")
+
+# D) Inicializar servicios de booking y notificaciones
+try:
+    from core.booking_flow import BookingFlowService
+    from core.notifications import NotificationService
+    
+    app.booking_service = BookingFlowService()
+    app.notification_service = NotificationService()
+    
+    # Endpoint para extras del booking flow
+    @app.route('/api/booking/extras', methods=['GET'])
+    def api_booking_extras():
+        """Obtener catálogo de extras disponibles"""
+        offer_id = request.args.get('offer_id', '')
+        extras = app.booking_service.obtener_extras_disponibles(offer_id)
+        return jsonify({'extras': extras})
+    
+    @app.route('/api/booking/calcular-extras', methods=['POST'])
+    def api_calcular_extras():
+        """Calcular precio de extras seleccionados"""
+        data = request.json or {}
+        resultado = app.booking_service.calcular_precio_extras(
+            extras_seleccionados=data.get('extras', []),
+            num_pasajeros=data.get('num_pasajeros', 1)
+        )
+        return jsonify(resultado)
+    
+    @app.route('/api/booking/prereserva', methods=['POST'])
+    def api_crear_prereserva():
+        """Crear pre-reserva con validación de pasajeros"""
+        data = request.json or {}
+        resultado = app.booking_service.crear_prereserva(data)
+        if not resultado.get('valido'):
+            return jsonify(resultado), 400
+        return jsonify(resultado)
+    
+    logger.info("✅ Servicios de Booking y Notificaciones inicializados")
+except Exception as e:
+    logger.warning(f"⚠️ No se pudieron cargar servicios de booking/notificaciones: {e}")
+
+# E) Crear tablas nuevas si no existen
+try:
+    from database import init_db
+    init_db()
+except Exception as e:
+    logger.warning(f"⚠️ No se pudieron crear tablas nuevas: {e}")
 
 # ==========================================
 # 10. ARRANQUE
@@ -4153,15 +4647,16 @@ else:
 # ==========================================
 # CORS CONFIGURATION
 # ==========================================
+cors_origins = os.getenv('CORS_ORIGINS', 'http://localhost:8000').split(',')
 try:
     CORS(app, resources={
         r"/api/*": {
-            "origins": ["*"],  # En producción, especificar dominios
+            "origins": [o.strip() for o in cors_origins],
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"]
         }
     })
-    logger.info("✅ CORS habilitado para /api/*")
+    logger.info(f"✅ CORS habilitado para /api/* → orígenes: {cors_origins}")
 except Exception as e:
     logger.warning(f"⚠️ No se pudo configurar CORS: {e}")
 
@@ -4170,4 +4665,4 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ No se pudo iniciar scheduler de precios calendario: {e}")
 
-print("✅ Proyecto limpio sin Stripe")
+logger.info("✅ Aplicación inicializada correctamente")

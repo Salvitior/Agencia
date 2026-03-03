@@ -13,9 +13,12 @@ load_dotenv()
 # Configuración desde variables de entorno
 DB_HOST = os.getenv('DB_HOST', 'localhost')
 DB_PORT = os.getenv('DB_PORT', '5432')
-DB_USER = os.getenv('DB_USER', 'agencia_user')
-DB_PASSWORD = os.getenv('DB_PASSWORD', 'agencia_pass_2024')
+DB_USER = os.getenv('DB_USER', 'postgres')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
 DB_NAME = os.getenv('DB_NAME', 'agencia_db')
+
+if not DB_PASSWORD:
+    raise RuntimeError("❌ DB_PASSWORD no está configurado en .env. Es obligatorio.")
 
 # URL de conexión PostgreSQL
 DATABASE_URL = f'postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'

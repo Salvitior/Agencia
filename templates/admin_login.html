@@ -1,360 +1,173 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login Admin</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acceso — Viatges Carcaixent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f1117; --surface: #181c27; --border: #2a2f42;
+      --text: #e8eaf0; --text2: #8a93b2; --text3: #555e7a;
+      --accent: #4f7cff; --red: #ef4444; --font: 'DM Sans', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #2c3e50;
-        }
+    /* subtle grid background */
+    body::before {
+      content: ''; position: fixed; inset: 0; z-index: 0;
+      background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px; opacity: .35;
+    }
 
-        .login-container {
-            width: 100%;
-            max-width: 450px;
-            padding: 20px;
-        }
+    .login-wrap { position: relative; z-index: 1; width: 100%; max-width: 380px; }
 
-        .login-card {
-            background: white;
-            border-radius: 16px;
-            padding: 40px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-            animation: slideUp 0.4s ease-out;
-        }
+    .login-logo {
+      display: flex; align-items: center; gap: 10px;
+      justify-content: center; margin-bottom: 32px;
+    }
+    .login-logo-icon {
+      width: 40px; height: 40px; background: var(--accent);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    }
+    .login-logo-text { font-size: 17px; font-weight: 700; }
+    .login-logo-sub  { font-size: 12px; color: var(--text3); margin-top: 1px; }
 
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: 0 8px 48px rgba(0,0,0,.5);
+      animation: up .3s ease;
+    }
+    @keyframes up { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
 
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
+    .login-card h1 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+    .login-card p  { font-size: 13px; color: var(--text2); margin-bottom: 24px; }
 
-        .login-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
+    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .form-label { font-size: 12px; font-weight: 500; color: var(--text2); }
+    .input-wrap { position: relative; }
+    .input-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--text3); pointer-events: none;
+    }
+    .form-control {
+      width: 100%; padding: 10px 12px 10px 38px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+      color: var(--text); font-size: 13px; font-family: var(--font);
+      outline: none; transition: border-color .15s, box-shadow .15s;
+    }
+    .form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,124,255,.15); }
+    .form-control::placeholder { color: var(--text3); }
 
-        .logo {
-            font-size: 48px;
-            margin-bottom: 15px;
-        }
+    .btn-login {
+      width: 100%; margin-top: 8px; padding: 11px;
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 600; font-family: var(--font);
+      cursor: pointer; transition: background .15s, transform .1s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-login:hover { background: #6b94ff; }
+    .btn-login:active { transform: scale(.98); }
+    .btn-login:disabled { opacity: .6; cursor: not-allowed; }
 
-        .login-header h1 {
-            font-size: 28px;
-            font-weight: 700;
-            color: #2c3e50;
-            margin-bottom: 8px;
-        }
+    .alert {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;
+    }
+    .alert-error { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.25); color: #f87171; }
 
-        .login-header p {
-            font-size: 14px;
-            color: #95a5a6;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            font-size: 14px;
-            font-weight: 600;
-            color: #2c3e50;
-            margin-bottom: 8px;
-        }
-
-        input[type="text"],
-        input[type="password"] {
-            width: 100%;
-            padding: 12px 16px;
-            border: 2px solid #e1e8ed;
-            border-radius: 10px;
-            font-size: 14px;
-            transition: all 0.3s;
-            font-family: inherit;
-        }
-
-        input[type="text"]:focus,
-        input[type="password"]:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .alert {
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-            }
-
-            to {
-                opacity: 1;
-            }
-        }
-
-        .alert-error {
-            background: #fadbd8;
-            color: #c0392b;
-            border-left: 4px solid #e74c3c;
-        }
-
-        .alert-success {
-            background: #d5f4e6;
-            color: #27ae60;
-            border-left: 4px solid #27ae60;
-        }
-
-        .btn-login {
-            width: 100%;
-            padding: 12px 24px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            margin-top: 10px;
-        }
-
-        .btn-login:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-login:active {
-            transform: translateY(0);
-        }
-
-        .btn-login:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .forgot-password {
-            text-align: right;
-            margin-top: 15px;
-        }
-
-        .forgot-password a {
-            font-size: 12px;
-            color: #667eea;
-            text-decoration: none;
-            transition: color 0.3s;
-        }
-
-        .forgot-password a:hover {
-            color: #764ba2;
-            text-decoration: underline;
-        }
-
-        .login-footer {
-            text-align: center;
-            margin-top: 20px;
-            font-size: 12px;
-            color: #95a5a6;
-        }
-
-        .loading-spinner {
-            display: inline-block;
-            width: 14px;
-            height: 14px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-top: 2px solid white;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-right: 8px;
-            vertical-align: middle;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        .form-divider {
-            display: flex;
-            align-items: center;
-            margin: 20px 0;
-            color: #bdc3c7;
-        }
-
-        .form-divider::before,
-        .form-divider::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: #e1e8ed;
-        }
-
-        .form-divider span {
-            padding: 0 12px;
-            font-size: 12px;
-        }
-
-        @media (max-width: 480px) {
-            .login-card {
-                padding: 25px;
-            }
-
-            .login-header h1 {
-                font-size: 24px;
-            }
-
-            .logo {
-                font-size: 36px;
-            }
-        }
-    </style>
+    .spinner {
+      width: 15px; height: 15px;
+      border: 2px solid rgba(255,255,255,.3); border-top-color: #fff;
+      border-radius: 50%; animation: spin .7s linear infinite; display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
 </head>
-
 <body>
-    <div class="login-container">
-        <div class="login-card">
-            <div class="login-header">
-                <div class="logo">G</div>
-                <h1>Panel Admin</h1>
-                <p>Agencia de Viajes</p>
-            </div>
-
-            {% if error %}
-            <div class="alert alert-error">
-                <strong>Error:</strong> {{ error }}
-            </div>
-            {% endif %}
-
-            <form method="POST" id="loginForm">
-                <div class="form-group">
-                    <label for="username">Usuario</label>
-                    <input type="text" id="username" name="username" placeholder="Usuario"
-                        required autofocus>
-                </div>
-
-                <div class="form-group">
-                    <label for="password">Contrasena</label>
-                    <input type="password" id="password" name="password" placeholder="Contrasena"
-                        required>
-                </div>
-
-                <button type="submit" class="btn-login" id="loginBtn">
-                    Iniciar Sesion
-                </button>
-            </form>
-
-            <div class="login-footer">
-                <div>Usuario: <code style="background: #f8f9fa; padding: 2px 6px; border-radius: 4px;">admin</code></div>
-                <div>Contrasena: <code style="background: #f8f9fa; padding: 2px 6px; border-radius: 4px;">password</code></div>
-            </div>
-        </div>
+  <div class="login-wrap">
+    <div class="login-logo">
+      <div class="login-logo-icon">
+        <svg width="22" height="22" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <div>
+        <div class="login-logo-text">Viatges Carcaixent</div>
+        <div class="login-logo-sub">Panel de administración</div>
+      </div>
     </div>
 
-    <script>
-        const loginForm = document.getElementById('loginForm');
-        const loginBtn = document.getElementById('loginBtn');
-        const usernameInput = document.getElementById('username');
-        const passwordInput = document.getElementById('password');
+    <div class="login-card">
+      <h1>Bienvenido</h1>
+      <p>Introduce tus credenciales para acceder</p>
 
-        loginForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
+      {% if error %}
+      <div class="alert alert-error">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        {{ error }}
+      </div>
+      {% endif %}
 
-            // Disable button and show loading
-            loginBtn.disabled = true;
-            const originalText = loginBtn.innerHTML;
-            loginBtn.innerHTML = 'Ingresando...';
+      <form method="POST" id="loginForm">
+        <div class="form-group">
+          <label class="form-label">Usuario</label>
+          <div class="input-wrap">
+            <span class="input-icon"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+            <input class="form-control" type="text" name="username" placeholder="admin" required autofocus>
+          </div>
+        </div>
 
-            try {
-                const formData = new FormData(loginForm);
-                const response = await fetch('/admin/login', {
-                    method: 'POST',
-                    body: formData
-                });
+        <div class="form-group">
+          <label class="form-label">Contraseña</label>
+          <div class="input-wrap">
+            <span class="input-icon"><svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></span>
+            <input class="form-control" type="password" name="password" placeholder="••••••••" required id="pwInput">
+          </div>
+        </div>
 
-                if (response.ok) {
-                    // Redirect to dashboard
-                    window.location.href = '/admin/dashboard';
-                } else {
-                    // Re-enable button
-                    loginBtn.disabled = false;
-                    loginBtn.innerHTML = originalText;
+        <button type="submit" class="btn-login" id="loginBtn">
+          <span class="spinner" id="spinner"></span>
+          <span id="btnText">Iniciar sesión</span>
+          <svg id="btnArrow" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </form>
+    </div>
+  </div>
 
-                    // Show error
-                    const errorDiv = document.createElement('div');
-                    errorDiv.className = 'alert alert-error';
-                    errorDiv.innerHTML = '<strong>Error:</strong> Credenciales invalidas.';
-                    loginForm.parentNode.insertBefore(errorDiv, loginForm);
+  <script>
+    const form = document.getElementById('loginForm');
+    const btn  = document.getElementById('loginBtn');
+    const spin = document.getElementById('spinner');
+    const txt  = document.getElementById('btnText');
+    const arr  = document.getElementById('btnArrow');
 
-                    // Clear inputs
-                    passwordInput.value = '';
-                    passwordInput.focus();
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      btn.disabled = true; spin.style.display = 'block'; arr.style.display = 'none';
+      txt.textContent = 'Verificando…';
 
-                    // Remove error after 5 seconds
-                    setTimeout(() => {
-                        errorDiv.remove();
-                    }, 5000);
-                }
-            } catch (error) {
-                loginBtn.disabled = false;
-                loginBtn.innerHTML = originalText;
-                console.error('Error:', error);
+      try {
+        const r = await fetch('/admin/login', { method: 'POST', body: new FormData(form) });
+        if (r.ok) { window.location.href = '/admin/dashboard'; return; }
+        // show error inline without reload
+        let errDiv = document.querySelector('.alert-error');
+        if (!errDiv) {
+          errDiv = document.createElement('div');
+          errDiv.className = 'alert alert-error';
+          errDiv.innerHTML = `<svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span>Credenciales incorrectas</span>`;
+          form.parentNode.insertBefore(errDiv, form);
+        }
+      } catch(e) { /* network error */ }
 
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'alert alert-error';
-                errorDiv.innerHTML = '<strong>Error:</strong> Error de conexion.';
-                loginForm.parentNode.insertBefore(errorDiv, loginForm);
-
-                setTimeout(() => {
-                    errorDiv.remove();
-                }, 5000);
-            }
-        });
-
-        // Focus on next field with Enter
-        usernameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                passwordInput.focus();
-            }
-        });
-
-        passwordInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                loginForm.dispatchEvent(new Event('submit'));
-            }
-        });
-    </script>
+      btn.disabled = false; spin.style.display = 'none'; arr.style.display = '';
+      txt.textContent = 'Iniciar sesión';
+      document.getElementById('pwInput').value = '';
+    });
+  </script>
 </body>
-
 </html>

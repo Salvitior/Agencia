@@ -1,254 +1,161 @@
 {% extends "admin_base.html" %}
-
 {% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block topbar_actions %}
+<a href="/admin/tours?new=1" class="btn btn-primary btn-sm">
+  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  Nuevo tour
+</a>
+{% endblock %}
 
 {% block content %}
-<div class="content">
-    <div class="header">
-        <h1 class="page-title">Panel de Control - Vuelos</h1>
-        <div class="user-info">
-            <div class="user-avatar">{{ current_user.username[0].upper() }}</div>
-            <span>{{ current_user.username }}</span>
-            <a href="/admin/logout" class="logout-btn">Salir</a>
-        </div>
+
+<!-- STATS -->
+<div class="stats-grid">
+  <div class="stat-card" style="--stat-color: var(--accent);">
+    <div class="stat-icon">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.67A2 2 0 012 .99h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
     </div>
+    <div class="stat-value">{{ total_reservas }}</div>
+    <div class="stat-label">Total Reservas</div>
+    <div class="stat-sub">{{ reservas_pendientes }} pendientes de confirmación</div>
+  </div>
 
-    <!-- Métricas principales -->
-    <div class="metrics-grid">
-        <div class="metric-card">
-            <div class="metric-icon" style="background: #3498db;">✈️</div>
-            <div class="metric-content">
-                <div class="metric-label">Total de Reservas</div>
-                <div class="metric-value">{{ total_reservas }}</div>
-                <div class="metric-subtitle">{{ reservas_pendientes }} pendientes</div>
-            </div>
-        </div>
-
-        <div class="metric-card">
-            <div class="metric-icon" style="background: #2ecc71;">💳</div>
-            <div class="metric-content">
-                <div class="metric-label">Reservas Pagadas</div>
-                <div class="metric-value">{{ reservas_pagadas }}</div>
-                <div class="metric-subtitle">De {{ total_reservas }} total</div>
-            </div>
-        </div>
-
-        <div class="metric-card">
-            <div class="metric-icon" style="background: #e74c3c;">🗺️</div>
-            <div class="metric-content">
-                <div class="metric-label">Tours Disponibles</div>
-                <div class="metric-value">{{ total_tours }}</div>
-                <div class="metric-subtitle">En catálogo</div>
-            </div>
-        </div>
+  <div class="stat-card" style="--stat-color: var(--green);">
+    <div class="stat-icon" style="background: rgba(34,197,94,.1); color: var(--green);">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
     </div>
+    <div class="stat-value">{{ reservas_pagadas }}</div>
+    <div class="stat-label">Reservas Pagadas</div>
+    <div class="stat-sub">De {{ total_reservas }} totales</div>
+  </div>
 
-    <!-- Reservas recientes -->
-    <div class="content-card">
-        <h2 style="margin-bottom: 20px; color: #2c3e50;">Reservas de Vuelos Recientes</h2>
-        {% if reservas_recientes %}
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Codigo Reserva</th>
-                    <th>Email</th>
-                    <th>Precio Total</th>
-                    <th>Estado</th>
-                    <th>Fecha</th>
-                    <th>Acción</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for reserva in reservas_recientes %}
-                <tr>
-                    <td><strong>{{ reserva.codigo_reserva }}</strong></td>
-                    <td>{{ reserva.email_cliente }}</td>
-                    <td>€{{ "%.2f"|format(reserva.precio_total) }}</td>
-                    <td>
-                        <span class="badge badge-{{ reserva.estado }}">{{ reserva.estado }}</span>
-                    </td>
-                    <td>{{ reserva.fecha_creacion.strftime('%d/%m/%Y %H:%M') if reserva.fecha_creacion else '-' }}</td>
-                    <td>
-                        <a href="/admin/reserva/{{ reserva.codigo_reserva }}" class="action-link">Ver Detalles →</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p style="color: #7f8c8d;">No hay reservas recientes.</p>
-        {% endif %}
+  <div class="stat-card" style="--stat-color: var(--teal);">
+    <div class="stat-icon" style="background: rgba(20,184,166,.1); color: var(--teal);">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
     </div>
+    <div class="stat-value">{{ total_tours }}</div>
+    <div class="stat-label">Tours en Catálogo</div>
+    <div class="stat-sub">Activos en la web</div>
+  </div>
 
-    <!-- Solicitudes de tours recientes -->
-    <div class="content-card">
-        <h2 style="margin-bottom: 20px; color: #2c3e50;">Solicitudes de Tours Recientes</h2>
-        {% if solicitudes_recientes %}
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Nombre</th>
-                    <th>Email</th>
-                    <th>Personas</th>
-                    <th>Estado</th>
-                    <th>Fecha</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for solicitud in solicitudes_recientes %}
-                <tr>
-                    <td>#{{ solicitud.id }}</td>
-                    <td>{{ solicitud.nombre }}</td>
-                    <td>{{ solicitud.email }}</td>
-                    <td>{{ solicitud.num_personas }}</td>
-                    <td>
-                        <span class="badge badge-{{ solicitud.estado }}">{{ solicitud.estado }}</span>
-                    </td>
-                    <td>{{ solicitud.fecha_solicitud.strftime('%d/%m/%Y %H:%M') if solicitud.fecha_solicitud else '-' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p style="color: #7f8c8d;">No hay solicitudes recientes.</p>
-        {% endif %}
+  <div class="stat-card" style="--stat-color: var(--yellow);">
+    <div class="stat-icon" style="background: rgba(245,158,11,.1); color: var(--yellow);">
+      <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
     </div>
+    <div class="stat-value">{{ solicitudes_recientes|length }}</div>
+    <div class="stat-label">Solicitudes Recientes</div>
+    <div class="stat-sub">Últimas 10 recibidas</div>
+  </div>
 </div>
 
-<style>
-    .metrics-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 20px;
-        margin-bottom: 30px;
-    }
+<!-- RESERVAS RECIENTES -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.67A2 2 0 012 .99h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+      Reservas de vuelo recientes
+    </div>
+    <a href="/admin/pedidos" class="btn btn-ghost btn-sm">Ver todas</a>
+  </div>
 
-    .metric-card {
-        background: white;
-        border-radius: 12px;
-        padding: 25px;
-        display: flex;
-        align-items: center;
-        gap: 20px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-        transition: all 0.3s;
-    }
+  {% if reservas_recientes %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Código</th><th>Email</th><th>Importe</th><th>Estado</th><th>Fecha</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for r in reservas_recientes %}
+        <tr>
+          <td><span class="td-mono">{{ r.codigo_reserva }}</span></td>
+          <td style="color: var(--text2);">{{ r.email_cliente }}</td>
+          <td style="font-weight:600;">€{{ "%.2f"|format(r.precio_total) }}</td>
+          <td>
+            {% set s = r.estado|upper %}
+            {% if s == 'CONFIRMADO' or s == 'EMITIDO' %}
+              <span class="badge badge-green"><span class="badge-dot" style="background:var(--green)"></span>{{ r.estado }}</span>
+            {% elif s == 'PAGADO' %}
+              <span class="badge badge-teal"><span class="badge-dot" style="background:var(--teal)"></span>{{ r.estado }}</span>
+            {% elif 'ERROR' in s %}
+              <span class="badge badge-red"><span class="badge-dot" style="background:var(--red)"></span>{{ r.estado }}</span>
+            {% elif 'PENDIENTE' in s %}
+              <span class="badge badge-yellow"><span class="badge-dot" style="background:var(--yellow)"></span>{{ r.estado }}</span>
+            {% else %}
+              <span class="badge badge-gray">{{ r.estado }}</span>
+            {% endif %}
+          </td>
+          <td style="color:var(--text3); font-size:12px;">{{ r.fecha_creacion.strftime('%d/%m/%Y %H:%M') if r.fecha_creacion else '—' }}</td>
+          <td>
+            <a href="/admin/reserva/{{ r.codigo_reserva }}" class="btn btn-ghost btn-sm">
+              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Ver
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.67A2 2 0 012 .99h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 8.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+    <p>No hay reservas todavía</p>
+  </div>
+  {% endif %}
+</div>
 
-    .metric-card:hover {
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-        transform: translateY(-4px);
-    }
+<!-- SOLICITUDES TOURS -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+      Solicitudes de tours recientes
+    </div>
+    <a href="/admin/solicitudes" class="btn btn-ghost btn-sm">Ver todas</a>
+  </div>
 
-    .metric-icon {
-        width: 60px;
-        height: 60px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 32px;
-        color: white;
-        flex-shrink: 0;
-    }
-
-    .metric-content {
-        flex: 1;
-    }
-
-    .metric-label {
-        font-size: 13px;
-        color: #7f8c8d;
-        font-weight: 500;
-        margin-bottom: 5px;
-    }
-
-    .metric-value {
-        font-size: 28px;
-        font-weight: 700;
-        color: #2c3e50;
-    }
-
-    .metric-subtitle {
-        font-size: 12px;
-        color: #95a5a6;
-        margin-top: 5px;
-    }
-
-    .data-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .data-table thead {
-        background: #ecf0f1;
-    }
-
-    .data-table th {
-        padding: 12px;
-        text-align: left;
-        font-weight: 600;
-        color: #2c3e50;
-        font-size: 12px;
-    }
-
-    .data-table td {
-        padding: 12px;
-        border-bottom: 1px solid #ecf0f1;
-        font-size: 13px;
-    }
-
-    .data-table tbody tr:hover {
-        background: #f9f9f9;
-    }
-
-    .badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-
-    .badge-PENDIENTE {
-        background: #ffeaa7;
-        color: #d63031;
-    }
-
-    .badge-PAGADO,
-    .badge-nueva {
-        background: #a9dfbf;
-        color: #27ae60;
-    }
-
-    .badge-CONFIRMADO {
-        background: #d5f4e6;
-        color: #16a085;
-    }
-
-    .badge-ERROR,
-    .badge-rechazado {
-        background: #fdcccf;
-        color: #c0392b;
-    }
-
-    .badge-EMITIDO {
-        background: #dfe6e9;
-        color: #2f3542;
-    }
-
-    .action-link {
-        color: #667eea;
-        text-decoration: none;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.3s;
-    }
-
-    .action-link:hover {
-        color: #5568d3;
-        text-decoration: underline;
-    }
-</style>
+  {% if solicitudes_recientes %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Nombre</th><th>Email</th><th>Personas</th><th>Estado</th><th>Fecha</th>
+      </tr></thead>
+      <tbody>
+        {% for s in solicitudes_recientes %}
+        <tr>
+          <td class="td-mono">#{{ s.id }}</td>
+          <td style="font-weight:500;">{{ s.nombre_cliente or s.nombre or '—' }}</td>
+          <td style="color:var(--text2);">{{ s.email_cliente or s.email or '—' }}</td>
+          <td>
+            <span class="badge badge-blue">{{ s.num_personas or 1 }} pax</span>
+          </td>
+          <td>
+            {% set st = (s.estado or '')|lower %}
+            {% if st == 'confirmado' or st == 'confirmada' %}
+              <span class="badge badge-green">Confirmado</span>
+            {% elif st == 'pendiente' or st == 'nueva' %}
+              <span class="badge badge-yellow">Pendiente</span>
+            {% elif st == 'rechazado' or st == 'rechazada' %}
+              <span class="badge badge-red">Rechazado</span>
+            {% else %}
+              <span class="badge badge-gray">{{ s.estado or '—' }}</span>
+            {% endif %}
+          </td>
+          <td style="color:var(--text3); font-size:12px;">
+            {{ s.fecha_solicitud.strftime('%d/%m/%Y %H:%M') if s.fecha_solicitud else '—' }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+    <p>No hay solicitudes todavía</p>
+  </div>
+  {% endif %}
+</div>
 {% endblock %}

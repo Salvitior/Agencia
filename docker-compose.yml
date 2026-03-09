@@ -3,29 +3,35 @@ services:
     image: postgres:16-alpine
     container_name: agencia_postgres
     environment:
-      POSTGRES_USER: ${DB_USER:-agencia_user}
+      POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       POSTGRES_DB: ${DB_NAME:-agencia_db}
-      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C.UTF-8"
+      # Configuración de performance
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=es_ES.UTF-8"
     ports:
-      - "${DB_PORT:-5433}:5432"
+      # Si el puerto 5432 está ocupado, cambia a 5433:5432
+      # Luego actualiza DB_PORT=5433 en .env
+      - "5433:5432"
     volumes:
+      # Persistencia de datos
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql/:/docker-entrypoint-initdb.d:ro
+      # Scripts de inicialización (opcional)
+      - ./database/init.sql:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-agencia_user} -d ${DB_NAME:-agencia_db}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-agencia_db}" ]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
     restart: unless-stopped
     networks:
       - agencia_network
 
+  # Redis para caché distribuida
   redis:
     image: redis:7-alpine
     container_name: agencia_redis
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "6379:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
@@ -34,51 +40,52 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
-      retries: 10
+      retries: 5
     networks:
       - agencia_network
 
+  # Prometheus para métricas
   prometheus:
     image: prom/prometheus:latest
     container_name: agencia_prometheus
     ports:
       - "9090:9090"
     volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.path=/prometheus
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
     restart: unless-stopped
     networks:
       - agencia_network
 
+  # Grafana para visualización
   grafana:
     image: grafana/grafana:latest
     container_name: agencia_grafana
     ports:
       - "3000:3000"
     environment:
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
-      GF_INSTALL_PLUGINS: redis-datasource
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
+      - GF_INSTALL_PLUGINS=redis-datasource
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana-datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
+      - ./monitoring/grafana-datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
     depends_on:
       - prometheus
     restart: unless-stopped
     networks:
       - agencia_network
 
+  # Opcional: PgAdmin para administración visual
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: agencia_pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@agencia.local}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@agencia.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?PGADMIN_PASSWORD is required}
-      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
       - "5050:80"
     volumes:
@@ -91,10 +98,15 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
   pgadmin_data:
+    driver: local
   redis_data:
+    driver: local
   prometheus_data:
+    driver: local
   grafana_data:
+    driver: local
 
 networks:
   agencia_network:

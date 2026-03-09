@@ -1,671 +1,600 @@
 {% extends "admin_base.html" %}
+{% block title %}Reserva {{ reserva.codigo_reserva }}{% endblock %}
+{% block page_title %}
+  Reserva
+  <span style="font-family:var(--mono); font-size:14px; color:var(--accent2); margin-left:8px;">{{ reserva.codigo_reserva }}</span>
+  &nbsp;
+  {% set s = reserva.estado|upper %}
+  {% if s == 'CONFIRMADO' or s == 'EMITIDO' %}<span class="badge badge-green">{{ reserva.estado }}</span>
+  {% elif s == 'PAGADO' %}<span class="badge badge-teal">{{ reserva.estado }}</span>
+  {% elif 'ERROR' in s %}<span class="badge badge-red">{{ reserva.estado }}</span>
+  {% elif 'PENDIENTE' in s %}<span class="badge badge-yellow">{{ reserva.estado }}</span>
+  {% else %}<span class="badge badge-gray">{{ reserva.estado }}</span>{% endif %}
+{% endblock %}
 
-{% block title %}Detalles Reserva - {{ reserva.codigo_reserva }}{% endblock %}
+{% block topbar_actions %}
+{% if reserva.order_id_duffel %}
+<a href="https://app.duffel.com/{{ duffel_account_id }}/{{ duffel_environment }}/orders/{{ reserva.order_id_duffel }}" target="_blank" class="btn btn-ghost btn-sm">
+  <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+  Ver en Duffel
+</a>
+{% endif %}
+<button onclick="syncDuffel()" class="btn btn-ghost btn-sm">
+  <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+  Sincronizar Duffel
+</button>
+<button onclick="guardarTodo()" class="btn btn-primary btn-sm" id="btn-save" style="display:none;">
+  <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+  Guardar cambios
+</button>
+<a href="/admin/dashboard" class="btn btn-ghost btn-sm">
+  <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+  Volver
+</a>
+{% endblock %}
 
 {% block content %}
-<div class="content">
-    <div class="header">
-        <h1 class="page-title">Reserva de Vuelo</h1>
-        <div class="user-info">
-            <span style="color: #667eea; font-weight: 600;">{{ reserva.codigo_reserva }}</span>
-            <span class="badge badge-{{ reserva.estado }}" style="margin-left: 10px;">{{ reserva.estado }}</span>
-            {% if reserva.order_id_duffel %}
-            <a href="https://app.duffel.com/{{ duffel_account_id }}/{{ duffel_environment }}/orders/{{ reserva.order_id_duffel }}" target="_blank" class="btn-duffel">
-                🔗 Ver en Duffel
-            </a>
-            {% endif %}
-        </div>
+<div style="display:grid; grid-template-columns: 1fr 340px; gap:20px;">
+
+<!-- COLUMNA IZQUIERDA -->
+<div>
+
+  <!-- DATOS CONTACTO -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Datos de contacto
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="openModal('modalContacto')">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Editar
+      </button>
+    </div>
+    <div class="info-row">
+      <div class="info-item">
+        <span class="info-label">Email</span>
+        <span class="info-value" id="disp-email">{{ reserva.email_cliente }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Teléfono</span>
+        <span class="info-value" id="disp-telefono">{{ reserva.telefono_cliente or '—' }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Tipo de viaje</span>
+        <span class="info-value">{% if reserva.es_viaje_redondo %}Ida y vuelta{% else %}Solo ida{% endif %}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Creación</span>
+        <span class="info-value">{{ reserva.fecha_creacion.strftime('%d/%m/%Y %H:%M') if reserva.fecha_creacion else '—' }}</span>
+      </div>
+      {% if reserva.fecha_pago %}
+      <div class="info-item">
+        <span class="info-label">Pago</span>
+        <span class="info-value">{{ reserva.fecha_pago.strftime('%d/%m/%Y %H:%M') }}</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- DATOS VUELO -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        Información del vuelo
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="openModal('modalVuelo')">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Editar vuelo
+        </button>
+        <button class="btn btn-ghost btn-sm" onclick="openModal('modalFecha')">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          Cambiar fecha
+        </button>
+      </div>
     </div>
 
-    <!-- Información de la reserva -->
-    <div class="content-card">
-        <h2 style="margin-bottom: 20px;">Información de Contacto</h2>
-        <div class="info-grid">
-            <div class="info-item">
-                <span class="info-label">Email Cliente</span>
-                <span class="info-value">{{ reserva.email_cliente }}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Teléfono</span>
-                <span class="info-value">{{ reserva.telefono_cliente or 'N/A' }}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Tipo de Viaje</span>
-                <span class="info-value">{% if reserva.es_viaje_redondo %}Redondo{% else %}Ida{% endif %}</span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Fecha Reserva</span>
-                <span class="info-value">{{ reserva.fecha_creacion.strftime('%d/%m/%Y %H:%M') if reserva.fecha_creacion else '-' }}</span>
-            </div>
+    <!-- Ruta visual -->
+    <div style="display:flex; align-items:center; gap:16px; padding:16px; background:var(--surface2); border-radius:var(--radius); margin-bottom:18px; border:1px solid var(--border);">
+      <div style="text-align:center; min-width:60px;">
+        <div style="font-size:22px; font-weight:700; font-family:var(--mono);" id="disp-origen">{{ datos_vuelo.get('origen', '—') }}</div>
+        <div style="font-size:11px; color:var(--text3); margin-top:2px;">Origen</div>
+      </div>
+      <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;">
+        <div style="height:1px; width:100%; background:var(--border2); position:relative;">
+          <svg style="position:absolute; top:-8px; left:50%; transform:translateX(-50%);" width="16" height="16" fill="none" stroke="var(--accent2)" stroke-width="1.5" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
         </div>
+        <div style="font-size:11px; color:var(--text3);" id="disp-duracion">{{ datos_vuelo.get('duracion','') }}</div>
+      </div>
+      <div style="text-align:center; min-width:60px;">
+        <div style="font-size:22px; font-weight:700; font-family:var(--mono);" id="disp-destino">{{ datos_vuelo.get('destino', '—') }}</div>
+        <div style="font-size:11px; color:var(--text3); margin-top:2px;">Destino</div>
+      </div>
     </div>
 
-    <!-- Información del Vuelo -->
-    <div class="content-card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h2>Información del Vuelo</h2>
-            <button class="btn btn-primary" onclick="sincronizarDuffel()" title="Traer últimos datos de Duffel">🔄 Sincronizar Duffel</button>
-        </div>
-        <div class="flight-info">
-            <div class="flight-route">
-                <div class="flight-city" id="display_origen">{{ datos_vuelo.get('origen', 'N/A') }}</div>
-                <div class="flight-arrow">✈️</div>
-                <div class="flight-city" id="display_destino">{{ datos_vuelo.get('destino', 'N/A') }}</div>
-            </div>
-            <table class="data-table" style="margin-top: 20px;">
-                <tbody>
-                    <tr>
-                        <td><strong>Fecha Salida:</strong></td>
-                        <td><span id="display_fecha_salida">{{ datos_vuelo.get('fecha_salida', 'N/A') }}</span></td>
-                    </tr>
-                    <tr>
-                        <td><strong>Aerolinea:</strong></td>
-                        <td><span id="display_aerolinea">{{ datos_vuelo.get('aerolinea', 'N/A') }}</span></td>
-                    </tr>
-                    <tr>
-                        <td><strong>Número Vuelo:</strong></td>
-                        <td><span id="display_numero_vuelo">{{ datos_vuelo.get('numero_vuelo', 'N/A') }}</span></td>
-                    </tr>
-                    {% if datos_vuelo.get('fecha_regreso') %}
-                    <tr>
-                        <td><strong>Fecha Regreso:</strong></td>
-                        <td><span id="display_fecha_regreso">{{ datos_vuelo.get('fecha_regreso') }}</span></td>
-                    </tr>
-                    {% endif %}
-                    <tr>
-                        <td><strong>Duración:</strong></td>
-                        <td><span id="display_duracion">{{ datos_vuelo.get('duracion', 'N/A') }}</span></td>
-                    </tr>
-                    {% if reserva.offer_id_duffel %}
-                    <tr style="background: #f0f0f0;">
-                        <td><strong>ID Oferta Duffel:</strong></td>
-                        <td><code style="background: #ecf0f1; padding: 4px 8px; border-radius: 4px;">{{ reserva.offer_id_duffel }}</code></td>
-                    </tr>
-                    {% endif %}
-                    {% if reserva.order_id_duffel %}
-                    <tr style="background: #f0f0f0;">
-                        <td><strong>ID Order Duffel:</strong></td>
-                        <td><code style="background: #ecf0f1; padding: 4px 8px; border-radius: 4px;">{{ reserva.order_id_duffel }}</code></td>
-                    </tr>
-                    {% endif %}
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Cambiar Fecha o Vuelo -->
-        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ecf0f1;">
-            <h3 style="margin-bottom: 15px;">Modificar Vuelo</h3>
-            <div class="action-buttons">
-                <button class="btn btn-primary" onclick="abrirModalCambiarFecha()">Cambiar Fecha</button>
-                <button class="btn btn-primary" onclick="abrirModalCambiarVuelo()">Cambiar Vuelo</button>
-            </div>
-        </div>
+    <div class="info-row" style="margin-bottom:0;">
+      <div class="info-item">
+        <span class="info-label">Fecha salida</span>
+        <span class="info-value" id="disp-fecha-salida">{{ datos_vuelo.get('fecha_salida','—') }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Aerolínea</span>
+        <span class="info-value" id="disp-aerolinea">{{ datos_vuelo.get('aerolinea','—') }}</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Nº Vuelo</span>
+        <span class="info-value td-mono" id="disp-num-vuelo">{{ datos_vuelo.get('numero_vuelo','—') }}</span>
+      </div>
+      {% if datos_vuelo.get('fecha_regreso') %}
+      <div class="info-item">
+        <span class="info-label">Fecha regreso</span>
+        <span class="info-value" id="disp-fecha-regreso">{{ datos_vuelo.get('fecha_regreso') }}</span>
+      </div>
+      {% endif %}
     </div>
 
-    <!-- Listado de Pasajeros -->
-    <div class="content-card">
-        <h2 style="margin-bottom: 20px;">Pasajeros ({{ pasajeros|length }})</h2>
-        {% if pasajeros %}
-        <div class="passengers-list">
-            {% for pasajero in pasajeros %}
-            <div class="passenger-card">
-                <div class="passenger-header">
-                    <h4 style="color: #2c3e50;">{{ pasajero.get('nombre', 'N/A') }}</h4>
-                    <span class="badge" style="background: #ecf0f1; color: #2c3e50;">{{ pasajero.get('tipo', 'adulto')|capitalize }}</span>
-                </div>
-                <table class="passenger-info">
-                    <tbody>
-                        <tr>
-                            <td><strong>Edad:</strong></td>
-                            <td>{{ pasajero.get('edad', 'N/A') }}</td>
-                            <td><strong>Género:</strong></td>
-                            <td>{{ pasajero.get('genero', 'N/A')|capitalize }}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Documento:</strong></td>
-                            <td>{{ pasajero.get('documento', 'N/A') }}</td>
-                            <td><strong>Asiento:</strong></td>
-                            <td><span class="badge badge-info">{{ pasajero.get('asiento', 'Sin asignar') }}</span></td>
-                        </tr>
-                        <tr>
-                            <td colspan="2"><strong>Equipaje (Maletas):</strong></td>
-                            <td colspan="2">
-                                {% if pasajero.get('maletas') %}
-                                    {% for maleta in pasajero.get('maletas', []) %}
-                                        <span class="badge badge-success" style="margin-right: 5px;">{{ maleta }}</span>
-                                    {% endfor %}
-                                {% else %}
-                                    <span style="color: #95a5a6;">Sin información de equipaje</span>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% if pasajero.get('facilidades') %}
-                        <tr>
-                            <td colspan="2"><strong>Facilidades Especiales:</strong></td>
-                            <td colspan="2">{{ pasajero.get('facilidades') }}</td>
-                        </tr>
-                        {% endif %}
-                    </tbody>
-                </table>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <p style="color: #7f8c8d;">No hay información de pasajeros disponible.</p>
-        {% endif %}
+    {% if reserva.offer_id_duffel or reserva.order_id_duffel %}
+    <div class="divider"></div>
+    <div style="display:flex; gap:16px; flex-wrap:wrap;">
+      {% if reserva.offer_id_duffel %}
+      <div class="info-item">
+        <span class="info-label">Offer ID</span>
+        <span class="tag">{{ reserva.offer_id_duffel[:30] }}…</span>
+      </div>
+      {% endif %}
+      {% if reserva.order_id_duffel %}
+      <div class="info-item">
+        <span class="info-label">Order ID</span>
+        <span class="tag">{{ reserva.order_id_duffel }}</span>
+      </div>
+      {% endif %}
+      {% if reserva.booking_reference %}
+      <div class="info-item">
+        <span class="info-label">Localizador</span>
+        <span class="tag" style="color:var(--green); background:rgba(34,197,94,.1);">{{ reserva.booking_reference }}</span>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- PASAJEROS -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        Pasajeros ({{ pasajeros|length }})
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="openModal('modalPasajeros')">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Editar pasajeros
+      </button>
     </div>
 
-    <!-- Precios -->
-    <div class="content-card">
-        <h2 style="margin-bottom: 20px;">Desglose de Precios</h2>
-        <table class="price-table">
-            <tbody>
-                <tr>
-                    <td>Precio Vuelos:</td>
-                    <td>€<span id="display_precio_vuelos">{{ "%.2f"|format(reserva.precio_vuelos) }}</span></td>
-                </tr>
-                <tr>
-                    <td>Extras (Equipaje, seguro, etc):</td>
-                    <td>€<span id="display_precio_extras">{{ "%.2f"|format(reserva.precio_extras) }}</span></td>
-                </tr>
-                <tr style="background: #def5f8; font-weight: bold; border-top: 2px solid #667eea;">
-                    <td>TOTAL:</td>
-                    <td>€<span id="display_precio_total">{{ "%.2f"|format(reserva.precio_total) }}</span></td>
-                </tr>
-            </tbody>
-        </table>
-        
-        <!-- Editar Precios -->
-        <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ecf0f1;">
-            <button class="btn btn-primary" onclick="abrirModalEditarPrecios()">Editar Precios</button>
+    {% if pasajeros %}
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      {% for pax in pasajeros %}
+      <div style="padding:14px; background:var(--surface2); border-radius:var(--radius); border:1px solid var(--border);">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+          <span style="font-weight:600; font-size:13.5px;">{{ pax.get('nombre') or (pax.get('given_name','') + ' ' + pax.get('family_name',''))|trim or 'Pasajero ' + loop.index|string }}</span>
+          <span class="badge badge-blue">{{ (pax.get('tipo') or pax.get('type','adulto'))|capitalize }}</span>
         </div>
-    </div>
-
-    <!-- Historial y Notas -->
-    <div class="content-card">
-        <h2 style="margin-bottom: 20px;">Notas Administrativas</h2>
-        <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;">
-            {% if reserva.notas %}
-                <p style="white-space: pre-wrap; color: #2c3e50;">{{ reserva.notas }}</p>
-            {% else %}
-                <p style="color: #95a5a6;">Sin notas registradas.</p>
-            {% endif %}
+        <div class="info-row">
+          {% if pax.get('edad') %}<div class="info-item"><span class="info-label">Edad</span><span class="info-value">{{ pax.get('edad') }}</span></div>{% endif %}
+          {% if pax.get('genero') %}<div class="info-item"><span class="info-label">Género</span><span class="info-value">{{ pax.get('genero')|capitalize }}</span></div>{% endif %}
+          {% if pax.get('documento') %}<div class="info-item"><span class="info-label">Documento</span><span class="info-value td-mono">{{ pax.get('documento') }}</span></div>{% endif %}
+          {% if pax.get('born_on') %}<div class="info-item"><span class="info-label">F. Nacimiento</span><span class="info-value">{{ pax.get('born_on') }}</span></div>{% endif %}
+          <div class="info-item"><span class="info-label">Asiento</span><span class="info-value">{{ pax.get('asiento','Sin asignar') }}</span></div>
         </div>
-        {% if reserva.error_mensaje %}
-        <div style="background: #fdcccf; padding: 15px; border-radius: 8px; border-left: 4px solid #c0392b; margin-top: 15px;">
-            <strong style="color: #c0392b;">Error Registrado:</strong>
-            <p style="color: #922b21; margin-top: 5px;">{{ reserva.error_mensaje }}</p>
+        {% if pax.get('maletas') %}
+        <div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap;">
+          {% for m in pax.get('maletas',[]) %}<span class="badge badge-gray">{{ m }}</span>{% endfor %}
         </div>
         {% endif %}
+      </div>
+      {% endfor %}
     </div>
+    {% else %}
+    <div class="empty-state" style="padding:32px;">
+      <p>No hay datos de pasajeros</p>
+    </div>
+    {% endif %}
+  </div>
 
-    <a href="/admin/dashboard" class="btn btn-secondary" style="margin-top: 20px;">← Volver al Dashboard</a>
-    <button class="btn btn-primary" style="margin-top: 20px; background: #27ae60; margin-left: 10px;" onclick="abrirModalGuardarTodo()">💾 Guardar Todos los Cambios</button>
+  <!-- NOTAS -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Notas administrativas
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="openModal('modalNotas')">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Editar notas
+      </button>
+    </div>
+    {% if reserva.notas %}
+    <pre id="disp-notas" style="white-space:pre-wrap; font-family:var(--font); font-size:13px; color:var(--text2); line-height:1.6;">{{ reserva.notas }}</pre>
+    {% else %}
+    <p style="color:var(--text3); font-size:13px;" id="disp-notas">Sin notas registradas.</p>
+    {% endif %}
+    {% if reserva.error_mensaje %}
+    <div class="alert alert-error" style="margin-top:14px;">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span><strong>Error registrado:</strong> {{ reserva.error_mensaje }}</span>
+    </div>
+    {% endif %}
+  </div>
+
+</div><!-- / col izquierda -->
+
+<!-- COLUMNA DERECHA -->
+<div>
+
+  <!-- PRECIOS -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        Desglose de precios
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="openModal('modalPrecios')">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Editar
+      </button>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--text2);">
+        <span>Precio vuelos</span>
+        <span id="disp-precio-vuelos" style="font-weight:500; color:var(--text);">€{{ "%.2f"|format(reserva.precio_vuelos) }}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:13px; color:var(--text2);">
+        <span>Extras</span>
+        <span id="disp-precio-extras" style="font-weight:500; color:var(--text);">€{{ "%.2f"|format(reserva.precio_extras or 0) }}</span>
+      </div>
+      <div class="divider" style="margin:4px 0;"></div>
+      <div style="display:flex; justify-content:space-between; font-size:15px; font-weight:700;">
+        <span>Total</span>
+        <span id="disp-precio-total" style="color:var(--green);">€{{ "%.2f"|format(reserva.precio_total) }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ESTADO -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Estado de la reserva
+      </div>
+    </div>
+    <div style="margin-bottom:14px;">
+      <div class="form-group">
+        <label class="form-label">Cambiar estado</label>
+        <select class="form-control" id="select-estado" onchange="cambiarEstado(this.value)">
+          <option value="PENDIENTE" {% if reserva.estado == 'PENDIENTE' %}selected{% endif %}>Pendiente</option>
+          <option value="PENDIENTE_PAGO_STRIPE" {% if reserva.estado == 'PENDIENTE_PAGO_STRIPE' %}selected{% endif %}>Pendiente pago Stripe</option>
+          <option value="PAGADO" {% if reserva.estado == 'PAGADO' %}selected{% endif %}>Pagado</option>
+          <option value="CONFIRMADO" {% if reserva.estado == 'CONFIRMADO' %}selected{% endif %}>Confirmado</option>
+          <option value="EMITIDO" {% if reserva.estado == 'EMITIDO' %}selected{% endif %}>Emitido</option>
+          <option value="CANCELADO" {% if reserva.estado == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
+          <option value="ERROR" {% if reserva.estado == 'ERROR' %}selected{% endif %}>Error</option>
+        </select>
+      </div>
+    </div>
+    {% if reserva.fecha_pago %}<div style="font-size:12px; color:var(--text3); margin-bottom:4px;">Pagado: {{ reserva.fecha_pago.strftime('%d/%m/%Y') }}</div>{% endif %}
+    {% if reserva.fecha_confirmacion %}<div style="font-size:12px; color:var(--text3);">Confirmado: {{ reserva.fecha_confirmacion.strftime('%d/%m/%Y') }}</div>{% endif %}
+  </div>
+
+  <!-- ACCIONES DUFFEL -->
+  {% if reserva.order_id_duffel %}
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        Acciones Duffel
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <button class="btn btn-ghost btn-sm" style="justify-content:flex-start;" onclick="reintentarEmision()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+        Reintentar emisión Duffel
+      </button>
+      <button class="btn btn-danger btn-sm" style="justify-content:flex-start;" onclick="cancelarOrden()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        Cancelar en Duffel
+      </button>
+    </div>
+  </div>
+  {% endif %}
+
+</div><!-- / col derecha -->
 </div>
 
-<!-- Modal Cambiar Fecha -->
-<div id="modalCambiarFecha" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="cerrarModal('modalCambiarFecha')">&times;</span>
-        <h2>Cambiar Fecha del Vuelo</h2>
-        <form onsubmit="cambiarFecha(event)">
-            <div class="form-group">
-                <label>Nueva Fecha:</label>
-                <input type="date" id="nuevaFecha" required>
-            </div>
-            <div class="form-group">
-                <label>Razón del cambio (opcional):</label>
-                <textarea id="razonCambio" rows="3"></textarea>
-            </div>
-            <button type="submit" class="btn btn-primary">Confirmar Cambio</button>
-            <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalCambiarFecha')">Cancelar</button>
-        </form>
+<!-- ── MODALES ── -->
+
+<!-- Modal Contacto -->
+<div class="modal-overlay" id="modalContacto">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Editar datos de contacto</span>
+      <button class="modal-close" onclick="closeModal('modalContacto')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label class="form-label">Email cliente</label>
+        <input class="form-control" id="edit-email" type="email" value="{{ reserva.email_cliente }}">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Teléfono</label>
+        <input class="form-control" id="edit-telefono" value="{{ reserva.telefono_cliente or '' }}">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalContacto')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarContacto()">Guardar</button>
+    </div>
+  </div>
 </div>
 
-<!-- Modal Cambiar Vuelo -->
-<div id="modalCambiarVuelo" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="cerrarModal('modalCambiarVuelo')">&times;</span>
-        <h2>Cambiar Vuelo</h2>
-        <form onsubmit="cambiarVuelo(event)">
-            <div class="form-group">
-                <label>Nuevo Vuelo (Número de vuelo):</label>
-                <input type="text" id="nuevoVuelo" placeholder="Ej: IB6440" required>
-            </div>
-            <div class="form-group">
-                <label>Nueva Aerolinea (opcional):</label>
-                <input type="text" id="nuevaAerolinea" placeholder="Ej: Iberia">
-            </div>
-            <div class="form-group">
-                <label>Razón del cambio (opcional):</label>
-                <textarea id="razonCambioVuelo" rows="3"></textarea>
-            </div>
-            <button type="submit" class="btn btn-primary">Confirmar Cambio</button>
-            <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalCambiarVuelo')">Cancelar</button>
-        </form>
+<!-- Modal Vuelo -->
+<div class="modal-overlay" id="modalVuelo">
+  <div class="modal-box modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">Editar datos del vuelo</span>
+      <button class="modal-close" onclick="closeModal('modalVuelo')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
+    <div class="form-grid cols-3">
+      <div class="form-group">
+        <label class="form-label">Origen (IATA)</label>
+        <input class="form-control" id="edit-origen" value="{{ datos_vuelo.get('origen','') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Destino (IATA)</label>
+        <input class="form-control" id="edit-destino" value="{{ datos_vuelo.get('destino','') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Aerolínea</label>
+        <input class="form-control" id="edit-aerolinea" value="{{ datos_vuelo.get('aerolinea','') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Número de vuelo</label>
+        <input class="form-control" id="edit-num-vuelo" value="{{ datos_vuelo.get('numero_vuelo','') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fecha salida</label>
+        <input class="form-control" id="edit-fecha-salida" value="{{ datos_vuelo.get('fecha_salida','') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fecha regreso</label>
+        <input class="form-control" id="edit-fecha-regreso" value="{{ datos_vuelo.get('fecha_regreso','') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Duración</label>
+        <input class="form-control" id="edit-duracion" value="{{ datos_vuelo.get('duracion','') }}">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalVuelo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarVuelo()">Guardar</button>
+    </div>
+  </div>
 </div>
 
-<!-- Modal Editar Precios -->
-<div id="modalEditarPrecios" class="modal">
-    <div class="modal-content">
-        <span class="close" onclick="cerrarModal('modalEditarPrecios')">&times;</span>
-        <h2>Editar Precios</h2>
-        <form onsubmit="editarPrecio()">
-            <div class="form-group">
-                <label>Precio Vuelos (€):</label>
-                <input type="number" id="editPrecioVuelos" step="0.01" required>
-            </div>
-            <div class="form-group">
-                <label>Precio Extras (€):</label>
-                <input type="number" id="editPrecioExtras" step="0.01" required>
-            </div>
-            <div class="form-group">
-                <label>Precio Total (€):</label>
-                <input type="number" id="editPrecioTotal" step="0.01" required>
-            </div>
-            <button type="submit" class="btn btn-primary">Guardar Precios</button>
-            <button type="button" class="btn btn-secondary" onclick="cerrarModal('modalEditarPrecios')">Cancelar</button>
-        </form>
+<!-- Modal Cambiar Fecha (API cambiar-fecha) -->
+<div class="modal-overlay" id="modalFecha">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Cambiar fecha de vuelo</span>
+      <button class="modal-close" onclick="closeModal('modalFecha')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label class="form-label">Nueva fecha <span class="req">*</span></label>
+        <input class="form-control" id="nueva-fecha" type="date">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Motivo del cambio</label>
+        <input class="form-control" id="razon-fecha" placeholder="Voluntad del cliente, incidencia…">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalFecha')">Cancelar</button>
+      <button class="btn btn-primary" onclick="cambiarFecha()">Confirmar cambio</button>
+    </div>
+  </div>
 </div>
 
-<style>
-    .info-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 20px;
-    }
+<!-- Modal Precios -->
+<div class="modal-overlay" id="modalPrecios">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Editar precios</span>
+      <button class="modal-close" onclick="closeModal('modalPrecios')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Precio vuelos (€)</label>
+        <input class="form-control" id="edit-precio-vuelos" type="number" step="0.01" value="{{ "%.2f"|format(reserva.precio_vuelos) }}" oninput="recalcTotal()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Extras (€)</label>
+        <input class="form-control" id="edit-precio-extras" type="number" step="0.01" value="{{ "%.2f"|format(reserva.precio_extras or 0) }}" oninput="recalcTotal()">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Total (€) — editable manualmente</label>
+        <input class="form-control" id="edit-precio-total" type="number" step="0.01" value="{{ "%.2f"|format(reserva.precio_total) }}">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalPrecios')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarPrecios()">Guardar precios</button>
+    </div>
+  </div>
+</div>
 
-    .info-item {
-        display: flex;
-        flex-direction: column;
-    }
+<!-- Modal Pasajeros -->
+<div class="modal-overlay" id="modalPasajeros">
+  <div class="modal-box modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">Editar pasajeros (JSON)</span>
+      <button class="modal-close" onclick="closeModal('modalPasajeros')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="alert alert-info" style="margin-bottom:14px;">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Edita el JSON directamente. Asegúrate de que es JSON válido antes de guardar.
+    </div>
+    <textarea class="form-control" id="edit-pasajeros-json" style="min-height:220px; font-family:var(--mono); font-size:12px;">{{ pasajeros|tojson(indent=2) }}</textarea>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalPasajeros')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarPasajeros()">Guardar pasajeros</button>
+    </div>
+  </div>
+</div>
 
-    .info-label {
-        font-size: 12px;
-        color: #7f8c8d;
-        font-weight: 600;
-        margin-bottom: 5px;
-        text-transform: uppercase;
-    }
+<!-- Modal Notas -->
+<div class="modal-overlay" id="modalNotas">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title">Editar notas administrativas</span>
+      <button class="modal-close" onclick="closeModal('modalNotas')"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <textarea class="form-control" id="edit-notas" style="min-height:140px;">{{ reserva.notas or '' }}</textarea>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalNotas')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarNotas()">Guardar notas</button>
+    </div>
+  </div>
+</div>
 
-    .info-value {
-        font-size: 16px;
-        color: #2c3e50;
-        font-weight: 500;
-    }
+{% endblock %}
 
-    .flight-info {
-        background: #f9f9f9;
-        padding: 20px;
-        border-radius: 8px;
-    }
-
-    .flight-route {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 20px;
-    }
-
-    .flight-city {
-        font-size: 18px;
-        font-weight: 700;
-        color: #667eea;
-        text-align: center;
-        flex: 1;
-    }
-
-    .flight-arrow {
-        font-size: 32px;
-        padding: 0 20px;
-        color: #95a5a6;
-    }
-
-    .passengers-list {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
-        gap: 15px;
-    }
-
-    .passenger-card {
-        background: #f9f9f9;
-        border: 1px solid #ecf0f1;
-        border-radius: 8px;
-        padding: 15px;
-    }
-
-    .passenger-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 15px;
-        padding-bottom: 10px;
-        border-bottom: 2px solid #667eea;
-    }
-
-    .passenger-info {
-        width: 100%;
-        font-size: 13px;
-    }
-
-    .passenger-info td {
-        padding: 8px;
-    }
-
-    .price-table {
-        width: 100%;
-        max-width: 500px;
-    }
-
-    .price-table td {
-        padding: 12px;
-        border-bottom: 1px solid #ecf0f1;
-        font-size: 14px;
-    }
-
-    .price-table td:first-child {
-        font-weight: 500;
-        color: #2c3e50;
-    }
-
-    .price-table td:last-child {
-        text-align: right;
-        font-weight: 600;
-        color: #667eea;
-    }
-
-    .action-buttons {
-        display: flex;
-        gap: 10px;
-        flex-wrap: wrap;
-    }
-
-    .btn {
-        padding: 10px 20px;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        transition: all 0.3s;
-    }
-
-    .btn-primary {
-        background: #667eea;
-        color: white;
-    }
-
-    .btn-primary:hover {
-        background: #5568d3;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-    }
-
-    .btn-secondary {
-        background: #ecf0f1;
-        color: #2c3e50;
-    }
-
-    .btn-secondary:hover {
-        background: #d5dbdb;
-    }
-
-    .btn-duffel {
-        display: inline-block;
-        padding: 8px 16px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-radius: 6px;
-        text-decoration: none;
-        font-size: 13px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s;
-        margin-left: 10px;
-    }
-
-    .btn-duffel:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-    }
-
-    .badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-    }
-
-    .badge-info {
-        background: #def5f8;
-        color: #16a085;
-    }
-
-    .badge-success {
-        background: #a9dfbf;
-        color: #27ae60;
-    }
-
-    .badge-PENDIENTE { background: #ffeaa7; color: #d63031; }
-    .badge-PAGADO { background: #a9dfbf; color: #27ae60; }
-    .badge-CONFIRMADO { background: #d5f4e6; color: #16a085; }
-    .badge-EMITIDO { background: #dfe6e9; color: #2f3542; }
-    .badge-ERROR { background: #fdcccf; color: #c0392b; }
-
-    /* Modal */
-    .modal {
-        display: none;
-        position: fixed;
-        z-index: 1000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-    }
-
-    .modal-content {
-        background: white;
-        margin: 5% auto;
-        padding: 30px;
-        border-radius: 12px;
-        width: 90%;
-        max-width: 500px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    }
-
-    .close {
-        color: #7f8c8d;
-        float: right;
-        font-size: 28px;
-        font-weight: bold;
-        cursor: pointer;
-    }
-
-    .close:hover { color: #2c3e50; }
-
-    .form-group {
-        margin-bottom: 20px;
-    }
-
-    .form-group label {
-        display: block;
-        margin-bottom: 5px;
-        font-weight: 600;
-        color: #2c3e50;
-    }
-
-    .form-group input,
-    .form-group textarea {
-        width: 100%;
-        padding: 10px;
-        border: 1px solid #ecf0f1;
-        border-radius: 6px;
-        font-size: 14px;
-    }
-
-    .form-group input:focus,
-    .form-group textarea:focus {
-        outline: none;
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-</style>
-
+{% block extra_js %}
 <script>
-    // Estado de datos editables
-    let datosVuelo = {{ datos_vuelo|tojson }};
-    let pasajeros = {{ pasajeros|tojson }};
-    let precios = {
-        precio_vuelos: {{ reserva.precio_vuelos }},
-        precio_extras: {{ reserva.precio_extras }},
-        precio_total: {{ reserva.precio_total }}
-    };
+const CODIGO = '{{ reserva.codigo_reserva }}';
 
-    function abrirModalCambiarFecha() {
-        document.getElementById('modalCambiarFecha').style.display = 'block';
-    }
+// Autorecalc total
+function recalcTotal() {
+  const v = parseFloat(document.getElementById('edit-precio-vuelos').value)||0;
+  const e = parseFloat(document.getElementById('edit-precio-extras').value)||0;
+  document.getElementById('edit-precio-total').value = (v+e).toFixed(2);
+}
 
-    function abrirModalCambiarVuelo() {
-        document.getElementById('modalCambiarVuelo').style.display = 'block';
-    }
+// Guardar contacto
+async function guardarContacto() {
+  const email = document.getElementById('edit-email').value.trim();
+  const tel   = document.getElementById('edit-telefono').value.trim();
+  const d = await apiCall(`/admin/reserva/${CODIGO}/guardar-datos`, 'POST', {
+    datos_vuelo: {email_cliente: email, telefono_cliente: tel}
+  });
+  if(d.success) {
+    document.getElementById('disp-email').textContent = email;
+    document.getElementById('disp-telefono').textContent = tel || '—';
+    closeModal('modalContacto'); showToast('Contacto actualizado', 'success');
+  } else { showToast(d.error || 'Error guardando', 'error'); }
+}
 
-    function abrirModalEditarPrecios() {
-        document.getElementById('modalEditarPrecios').style.display = 'block';
-        document.getElementById('editPrecioVuelos').value = precios.precio_vuelos.toFixed(2);
-        document.getElementById('editPrecioExtras').value = precios.precio_extras.toFixed(2);
-        document.getElementById('editPrecioTotal').value = precios.precio_total.toFixed(2);
-    }
+// Guardar datos del vuelo
+async function guardarVuelo() {
+  const dv = {
+    origen:        document.getElementById('edit-origen').value.trim(),
+    destino:       document.getElementById('edit-destino').value.trim(),
+    aerolinea:     document.getElementById('edit-aerolinea').value.trim(),
+    numero_vuelo:  document.getElementById('edit-num-vuelo').value.trim(),
+    fecha_salida:  document.getElementById('edit-fecha-salida').value.trim(),
+    fecha_regreso: document.getElementById('edit-fecha-regreso').value.trim(),
+    duracion:      document.getElementById('edit-duracion').value.trim(),
+  };
+  const d = await apiCall(`/admin/reserva/${CODIGO}/guardar-datos`, 'POST', {datos_vuelo: dv});
+  if(d.success) {
+    document.getElementById('disp-origen').textContent = dv.origen || '—';
+    document.getElementById('disp-destino').textContent = dv.destino || '—';
+    document.getElementById('disp-aerolinea').textContent = dv.aerolinea || '—';
+    document.getElementById('disp-num-vuelo').textContent = dv.numero_vuelo || '—';
+    document.getElementById('disp-fecha-salida').textContent = dv.fecha_salida || '—';
+    document.getElementById('disp-duracion').textContent = dv.duracion || '';
+    if(document.getElementById('disp-fecha-regreso')) document.getElementById('disp-fecha-regreso').textContent = dv.fecha_regreso||'—';
+    closeModal('modalVuelo'); showToast('Vuelo actualizado', 'success');
+  } else { showToast(d.error || 'Error guardando', 'error'); }
+}
 
-    function abrirModalGuardarTodo() {
-        if (confirm('¿Guardar todos los cambios que haya realizado?')) {
-            guardarTodosDatos();
-        }
-    }
+// Cambiar fecha (usa endpoint dedicado)
+async function cambiarFecha() {
+  const fecha = document.getElementById('nueva-fecha').value;
+  const razon = document.getElementById('razon-fecha').value;
+  if(!fecha) { showToast('Introduce una fecha', 'error'); return; }
+  const d = await apiCall(`/admin/reserva/${CODIGO}/cambiar-fecha`, 'POST', {nueva_fecha: fecha, razon});
+  if(d.success) { closeModal('modalFecha'); showToast('Fecha actualizada', 'success'); location.reload(); }
+  else { showToast(d.error || 'Error', 'error'); }
+}
 
-    function sincronizarDuffel() {
-        if (!confirm('¿Sincronizar datos desde Duffel? Esto puede sobrescribir cambios locales.')) return;
-        
-        fetch('/admin/reserva/{{ reserva.codigo_reserva }}/sync-duffel', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                alert('✅ ' + data.message);
-                location.reload();
-            } else {
-                alert('❌ Error: ' + (data.error || data.message));
-            }
-        })
-        .catch(e => alert('❌ Error: ' + e));
-    }
+// Guardar precios
+async function guardarPrecios() {
+  const pv = parseFloat(document.getElementById('edit-precio-vuelos').value)||0;
+  const pe = parseFloat(document.getElementById('edit-precio-extras').value)||0;
+  const pt = parseFloat(document.getElementById('edit-precio-total').value)||0;
+  const d = await apiCall(`/admin/reserva/${CODIGO}/guardar-datos`, 'POST', {
+    precio_vuelos: pv, precio_extras: pe, precio_total: pt
+  });
+  if(d.success) {
+    document.getElementById('disp-precio-vuelos').textContent = '€' + pv.toFixed(2);
+    document.getElementById('disp-precio-extras').textContent = '€' + pe.toFixed(2);
+    document.getElementById('disp-precio-total').textContent  = '€' + pt.toFixed(2);
+    closeModal('modalPrecios'); showToast('Precios actualizados', 'success');
+  } else { showToast(d.error || 'Error', 'error'); }
+}
 
-    function editarPrecio() {
-        event.preventDefault();
-        precios.precio_vuelos = parseFloat(document.getElementById('editPrecioVuelos').value) || 0;
-        precios.precio_extras = parseFloat(document.getElementById('editPrecioExtras').value) || 0;
-        precios.precio_total = parseFloat(document.getElementById('editPrecioTotal').value) || 0;
-        
-        // Actualizar display
-        document.getElementById('display_precio_vuelos').innerText = precios.precio_vuelos.toFixed(2);
-        document.getElementById('display_precio_extras').innerText = precios.precio_extras.toFixed(2);
-        document.getElementById('display_precio_total').innerText = precios.precio_total.toFixed(2);
-        
-        alert('✅ Precios actualizados localmente. Haz clic en "Guardar Todos los Cambios" para persistir.');
-        cerrarModal('modalEditarPrecios');
-    }
+// Guardar pasajeros (JSON raw)
+async function guardarPasajeros() {
+  let pax;
+  try { pax = JSON.parse(document.getElementById('edit-pasajeros-json').value); }
+  catch(e) { showToast('JSON inválido: ' + e.message, 'error'); return; }
+  const d = await apiCall(`/admin/reserva/${CODIGO}/guardar-datos`, 'POST', {pasajeros: pax});
+  if(d.success) { closeModal('modalPasajeros'); showToast('Pasajeros guardados', 'success'); location.reload(); }
+  else { showToast(d.error || 'Error', 'error'); }
+}
 
-    function guardarTodosDatos() {
-        const payload = {
-            datos_vuelo: datosVuelo,
-            pasajeros: pasajeros,
-            precio_vuelos: precios.precio_vuelos,
-            precio_extras: precios.precio_extras,
-            precio_total: precios.precio_total
-        };
+// Guardar notas
+async function guardarNotas() {
+  const notas = document.getElementById('edit-notas').value;
+  const d = await apiCall(`/admin/reserva/${CODIGO}/guardar-datos`, 'POST', {notas});
+  if(d.success) {
+    document.getElementById('disp-notas').textContent = notas || 'Sin notas registradas.';
+    closeModal('modalNotas'); showToast('Notas guardadas', 'success');
+  } else { showToast(d.error || 'Error', 'error'); }
+}
 
-        fetch('/admin/reserva/{{ reserva.codigo_reserva }}/guardar-datos', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                alert('✅ ' + data.message);
-                location.reload();
-            } else {
-                alert('❌ Error: ' + (data.error || data.message));
-            }
-        })
-        .catch(e => alert('❌ Error: ' + e));
-    }
+// Cambiar estado
+async function cambiarEstado(estado) {
+  const d = await apiCall(`/admin/reserva/${CODIGO}/guardar-datos`, 'POST', {estado});
+  if(d.success) { showToast('Estado actualizado a ' + estado, 'success'); }
+  else { showToast(d.error || 'Error', 'error'); document.getElementById('select-estado').value = '{{ reserva.estado }}'; }
+}
 
-    function cerrarModal(id) {
-        document.getElementById(id).style.display = 'none';
-    }
+// Sincronizar Duffel
+async function syncDuffel() {
+  showToast('Sincronizando con Duffel…', 'info');
+  const d = await apiCall(`/admin/reserva/${CODIGO}/sync-duffel`, 'POST');
+  if(d.success) { showToast(d.message || 'Sincronizado', 'success'); setTimeout(()=>location.reload(), 1200); }
+  else { showToast(d.error || 'Error sincronizando', 'error'); }
+}
 
-    function cambiarFecha(event) {
-        event.preventDefault();
-        const nuevaFecha = document.getElementById('nuevaFecha').value;
-        const razon = document.getElementById('razonCambio').value;
+// Reintentar emisión
+async function reintentarEmision() {
+  showToast('Reintentando emisión…', 'info');
+  const d = await apiCall('/api/vuelos/retry-balance-emission', 'POST', {codigo_reserva: CODIGO});
+  if(d.success) { showToast('Emisión exitosa: ' + (d.booking_reference||''), 'success'); setTimeout(()=>location.reload(), 1500); }
+  else { showToast(d.error || 'Error en emisión', 'error'); }
+}
 
-        fetch('/admin/reserva/{{ reserva.codigo_reserva }}/cambiar-fecha', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({nueva_fecha: nuevaFecha, razon: razon})
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                alert('✅ ' + data.message);
-                location.reload();
-            } else {
-                alert('❌ Error: ' + (data.error || data.message));
-            }
-        })
-        .catch(e => alert('❌ Error: ' + e));
-    }
-
-    function cambiarVuelo(event) {
-        event.preventDefault();
-        const nuevoVuelo = document.getElementById('nuevoVuelo').value;
-        const aerolinea = document.getElementById('nuevaAerolinea').value;
-        const razon = document.getElementById('razonCambioVuelo').value;
-
-        fetch('/admin/reserva/{{ reserva.codigo_reserva }}/cambiar-vuelo', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({nuevo_vuelo: nuevoVuelo, aerolinea: aerolinea, razon: razon})
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                alert('✅ ' + data.message);
-                location.reload();
-            } else {
-                alert('❌ Error: ' + (data.error || data.message));
-            }
-        })
-        .catch(e => alert('❌ Error: ' + e));
-    }
-
-    // Cerrar modal al hacer click fuera
-    window.onclick = function(event) {
-        const modal1 = document.getElementById('modalCambiarFecha');
-        const modal2 = document.getElementById('modalCambiarVuelo');
-        const modal3 = document.getElementById('modalEditarPrecios');
-        if (event.target == modal1) modal1.style.display = 'none';
-        if (event.target == modal2) modal2.style.display = 'none';
-        if (event.target == modal3) modal3.style.display = 'none';
-    }
+// Cancelar orden
+async function cancelarOrden() {
+  if(!confirm('¿Cancelar esta reserva en Duffel? Esta acción puede ser irreversible.')) return;
+  const d = await apiCall('/api/vuelos/cancelar-orden', 'POST', {codigo_reserva: CODIGO});
+  if(d.success) { showToast('Reserva cancelada en Duffel', 'success'); setTimeout(()=>location.reload(), 1500); }
+  else { showToast(d.error || 'Error cancelando', 'error'); }
+}
 </script>
 {% endblock %}

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error | Viatges Carcaixent</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style/style.css') }}">
+    <style>
+        .error-container {
+            max-width: 600px;
+            margin: 80px auto;
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .error-code {
+            font-size: 6rem;
+            font-weight: 900;
+            color: #e2e8f0;
+            line-height: 1;
+        }
+        .error-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 16px 0 8px;
+        }
+        .error-msg {
+            color: #64748b;
+            margin-bottom: 32px;
+        }
+        .btn-back {
+            display: inline-block;
+            background: #2563eb;
+            color: #fff;
+            padding: 12px 28px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .btn-back:hover { background: #1d4ed8; }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-code"><svg width="72" height="72" fill="none" stroke="#e2e8f0" stroke-width="1.5" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+        <h1 class="error-title">{{ titulo | default('Ha ocurrido un error') }}</h1>
+        <p class="error-msg">{{ mensaje | default('Lo sentimos, algo ha ido mal. Por favor inténtalo de nuevo o contacta con nosotros.') }}</p>
+        <a href="{{ url_for('home') }}" class="btn-back">Volver al inicio</a>
+    </div>
+</body>
+</html>

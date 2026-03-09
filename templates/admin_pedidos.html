@@ -1,166 +1,123 @@
 {% extends "admin_base.html" %}
+{% block title %}Pedidos{% endblock %}
+{% block page_title %}Pedidos de vuelos{% endblock %}
 
-{% block title %}Pedidos de Vuelos{% endblock %}
+{% block topbar_actions %}
+<div style="display:flex;align-items:center;gap:8px;">
+  <div style="position:relative;">
+    <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </span>
+    <input type="text" id="searchInput" placeholder="Buscar por email o código…" oninput="filterTable()"
+      style="padding:7px 12px 7px 32px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:var(--font);outline:none;width:240px;">
+  </div>
+  <select id="filterEstado" onchange="filterTable()"
+    style="padding:7px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:var(--font);cursor:pointer;">
+    <option value="">Todos los estados</option>
+    <option value="PENDIENTE">Pendiente</option>
+    <option value="PAGADO">Pagado</option>
+    <option value="CONFIRMADO">Confirmado</option>
+    <option value="EMITIDO">Emitido</option>
+    <option value="CANCELADO">Cancelado</option>
+    <option value="ERROR">Error</option>
+  </select>
+</div>
+{% endblock %}
 
 {% block content %}
-<div class="content">
-    <div class="header">
-        <h1 class="page-title">Pedidos de Vuelos</h1>
-        <div class="user-info">
-            <div class="user-avatar">{{ current_user.username[0].upper() }}</div>
-            <span>{{ current_user.username }}</span>
-            <a href="/admin/logout" class="logout-btn">Salir</a>
-        </div>
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5z"/><path d="M20.5 10H19V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/><path d="M9.5 14c.83 0 1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5S8 21.33 8 20.5v-5c0-.83.67-1.5 1.5-1.5z"/><path d="M3.5 14H5v1.5c0 .83-.67 1.5-1.5 1.5S2 16.33 2 15.5 2.67 14 3.5 14z"/><path d="M14 14.5c0-.83.67-1.5 1.5-1.5h5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5h-5c-.83 0-1.5-.67-1.5-1.5z"/><path d="M15.5 19H14v1.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5-.67-1.5-1.5-1.5z"/><path d="M10 9.5C10 8.67 9.33 8 8.5 8h-5C2.67 8 2 8.67 2 9.5S2.67 11 3.5 11h5c.83 0 1.5-.67 1.5-1.5z"/><path d="M8.5 5H10V3.5C10 2.67 9.33 2 8.5 2S7 2.67 7 3.5 7.67 5 8.5 5z"/></svg>
+      Todos los pedidos
+      <span style="font-size:12px;color:var(--text3);font-weight:400;" id="count-label"></span>
     </div>
+  </div>
 
-    <div class="content-card">
-        <h2 style="margin-bottom: 20px;">Todos los Pedidos</h2>
-        
-        {% if pedidos %}
-        <table class="data-table" style="width: 100%;">
-            <thead>
-                <tr style="background: #f5f5f5; border-bottom: 2px solid #667eea;">
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">ID Pedido</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Cliente</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Origen</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Destino</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Estado</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Fecha</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for pedido in pedidos %}
-                <tr style="border-bottom: 1px solid #ecf0f1;">
-                    <td style="padding: 12px;">
-                        <span style="color: #667eea; font-weight: 600;">{{ pedido.id }}</span>
-                    </td>
-                    <td style="padding: 12px;">{{ pedido.email or 'N/A' }}</td>
-                    <td style="padding: 12px;">
-                        <span style="background: #ecf0f1; padding: 4px 8px; border-radius: 4px;">
-                            {{ pedido.origen or 'N/A' }}
-                        </span>
-                    </td>
-                    <td style="padding: 12px;">
-                        <span style="background: #ecf0f1; padding: 4px 8px; border-radius: 4px;">
-                            {{ pedido.destino or 'N/A' }}
-                        </span>
-                    </td>
-                    <td style="padding: 12px;">
-                        <span style="background: 
-                            {% if pedido.estado == 'completado' %}#a9dfbf
-                            {% elif pedido.estado == 'pendiente' %}#ffeaa7
-                            {% else %}#d5dbdb
-                            {% endif %};
-                            color: #2c3e50; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;">
-                            {{ pedido.estado|capitalize }}
-                        </span>
-                    </td>
-                    <td style="padding: 12px; color: #7f8c8d; font-size: 13px;">
-                        {% if pedido.fecha_pedido %}
-                            {{ pedido.fecha_pedido.strftime('%d/%m/%Y %H:%M') }}
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div style="padding: 40px; text-align: center; color: #95a5a6;">
-            <p style="font-size: 16px;">📭 No hay pedidos registrados</p>
-        </div>
-        {% endif %}
-    </div>
+  {% if pedidos %}
+  <div class="table-wrap">
+    <table id="pedidosTable">
+      <thead><tr>
+        <th>Código</th>
+        <th>Cliente</th>
+        <th>Ruta</th>
+        <th>Importe</th>
+        <th>Estado</th>
+        <th>Fecha</th>
+        <th></th>
+      </tr></thead>
+      <tbody>
+        {% for p in pedidos %}
+        <tr data-estado="{{ p.estado|upper }}" data-search="{{ (p.email_cliente or '') + ' ' + (p.codigo_reserva or '') }}">
+          <td><span class="td-mono">{{ p.codigo_reserva or '#' + p.id|string }}</span></td>
+          <td style="color:var(--text2);">{{ p.email_cliente or p.email or '—' }}</td>
+          <td>
+            {% set dv = {} %}
+            {% if p.datos_vuelo %}{% set dv = p.datos_vuelo | tojson | fromjson if p.datos_vuelo is string else p.datos_vuelo %}{% endif %}
+            <span class="tag">{{ dv.get('origen', p.origen or '—') }}</span>
+            <span style="color:var(--text3);margin:0 4px;">→</span>
+            <span class="tag">{{ dv.get('destino', p.destino or '—') }}</span>
+          </td>
+          <td style="font-weight:600;">€{{ "%.2f"|format(p.precio_total) if p.precio_total else '—' }}</td>
+          <td>
+            {% set s = (p.estado or '')|upper %}
+            {% if s in ['CONFIRMADO','EMITIDO'] %}<span class="badge badge-green">{{ p.estado }}</span>
+            {% elif s == 'PAGADO' %}<span class="badge badge-teal">{{ p.estado }}</span>
+            {% elif 'PENDIENTE' in s %}<span class="badge badge-yellow">{{ p.estado }}</span>
+            {% elif 'ERROR' in s or s == 'CANCELADO' %}<span class="badge badge-red">{{ p.estado }}</span>
+            {% else %}<span class="badge badge-gray">{{ p.estado or '—' }}</span>{% endif %}
+          </td>
+          <td style="color:var(--text3);font-size:12px;">
+            {{ p.fecha_creacion.strftime('%d/%m/%Y %H:%M') if p.fecha_creacion else '—' }}
+          </td>
+          <td>
+            <a href="/admin/reserva/{{ p.codigo_reserva }}" class="btn btn-ghost btn-sm">
+              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Detalle
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
-    <a href="/admin/dashboard" class="btn btn-secondary" style="margin-top: 20px;">← Volver al Dashboard</a>
+  {% else %}
+  <div class="empty-state">
+    <svg width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M14.5 10c-.83 0-1.5-.67-1.5-1.5v-5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v5c0 .83-.67 1.5-1.5 1.5z"/><path d="M20.5 10H19V8.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+    <p>No hay pedidos de vuelo todavía</p>
+  </div>
+  {% endif %}
 </div>
+{% endblock %}
 
-<style>
-    .content {
-        padding: 20px;
-    }
+{% block extra_js %}
+<script>
+  function badgeClass(s) {
+    s = s.toUpperCase();
+    if(['CONFIRMADO','EMITIDO'].includes(s)) return 'badge-green';
+    if(s === 'PAGADO') return 'badge-teal';
+    if(s.includes('PENDIENTE')) return 'badge-yellow';
+    if(s.includes('ERROR') || s === 'CANCELADO') return 'badge-red';
+    return 'badge-gray';
+  }
 
-    .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 30px;
-    }
+  function filterTable() {
+    const q     = document.getElementById('searchInput').value.toLowerCase();
+    const est   = document.getElementById('filterEstado').value.toUpperCase();
+    const rows  = document.querySelectorAll('#pedidosTable tbody tr');
+    let vis = 0;
+    rows.forEach(tr => {
+      const matchQ = !q || tr.dataset.search.toLowerCase().includes(q);
+      const matchE = !est || tr.dataset.estado.includes(est);
+      tr.style.display = matchQ && matchE ? '' : 'none';
+      if(matchQ && matchE) vis++;
+    });
+    const lbl = document.getElementById('count-label');
+    lbl.textContent = vis + ' resultado' + (vis===1?'':'s');
+  }
 
-    .page-title {
-        font-size: 28px;
-        font-weight: 700;
-        color: #2c3e50;
-        margin: 0;
-    }
-
-    .user-info {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-    }
-
-    .user-avatar {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: #667eea;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-    }
-
-    .logout-btn {
-        padding: 8px 16px;
-        background: #e74c3c;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        text-decoration: none;
-        font-size: 13px;
-        font-weight: 600;
-        transition: all 0.3s;
-    }
-
-    .logout-btn:hover {
-        background: #c0392b;
-    }
-
-    .content-card {
-        background: white;
-        border-radius: 12px;
-        padding: 30px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
-    }
-
-    .data-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .btn {
-        display: inline-block;
-        padding: 10px 20px;
-        border-radius: 6px;
-        text-decoration: none;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s;
-        border: none;
-    }
-
-    .btn-secondary {
-        background: #ecf0f1;
-        color: #2c3e50;
-    }
-
-    .btn-secondary:hover {
-        background: #d5dbdb;
-    }
-</style>
+  // Init count
+  document.addEventListener('DOMContentLoaded', () => filterTable());
+</script>
 {% endblock %}

@@ -10,6 +10,11 @@ fail() {
     exit 1
 }
 
+read_container_env() {
+    local key="$1"
+    docker compose exec -T postgres env | sed -n "s/^${key}=//p" | head -n1
+}
+
 find_latest_backup() {
     find "$ROOT_DIR/backups" -maxdepth 1 -type f \
         \( -name 'agencia_*.sql' -o -name 'agencia_*.sql.gz' \) \
@@ -26,8 +31,16 @@ fi
 [[ -n "$dump_file" ]] || fail "No se encontró ningún dump válido en backups/"
 [[ -f "$dump_file" ]] || fail "No existe el dump: $dump_file"
 
-db_user="$(sed -n 's/^DB_USER=//p' .env | head -n1)"
-db_name="$(sed -n 's/^DB_NAME=//p' .env | head -n1)"
+db_user="$(read_container_env POSTGRES_USER)"
+db_name="$(read_container_env POSTGRES_DB)"
+
+if [[ -z "$db_user" ]]; then
+    db_user="$(sed -n 's/^DB_USER=//p' .env | head -n1)"
+fi
+
+if [[ -z "$db_name" ]]; then
+    db_name="$(sed -n 's/^DB_NAME=//p' .env | head -n1)"
+fi
 
 [[ -n "$db_user" ]] || fail "DB_USER no está definido en .env"
 [[ -n "$db_name" ]] || fail "DB_NAME no está definido en .env"

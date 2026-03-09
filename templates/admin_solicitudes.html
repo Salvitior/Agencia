@@ -1,175 +1,134 @@
 {% extends "admin_base.html" %}
+{% block title %}Solicitudes{% endblock %}
+{% block page_title %}Solicitudes de tours{% endblock %}
 
-{% block title %}Solicitudes de Tours{% endblock %}
+{% block topbar_actions %}
+<div style="position:relative;">
+  <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);">
+    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  </span>
+  <input type="text" id="searchInput" placeholder="Buscar nombre o email…" oninput="filterRows()"
+    style="padding:7px 12px 7px 32px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:var(--font);outline:none;width:220px;">
+</div>
+<select id="filterEstado" onchange="filterRows()"
+  style="padding:7px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:var(--font);cursor:pointer;">
+  <option value="">Todos los estados</option>
+  <option value="nueva">Nueva</option>
+  <option value="pendiente">Pendiente</option>
+  <option value="contactado">Contactado</option>
+  <option value="confirmada">Confirmada</option>
+  <option value="rechazada">Rechazada</option>
+  <option value="cerrado">Cerrado</option>
+</select>
+{% endblock %}
 
 {% block content %}
-<div class="content">
-    <div class="header">
-        <h1 class="page-title">Solicitudes de Tours</h1>
-        <div class="user-info">
-            <div class="user-avatar">{{ current_user.username[0].upper() }}</div>
-            <span>{{ current_user.username }}</span>
-            <a href="/admin/logout" class="logout-btn">Salir</a>
-        </div>
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+      Solicitudes recibidas
+      <span style="font-size:12px;color:var(--text3);font-weight:400;" id="count-label"></span>
     </div>
+  </div>
 
-    <div class="content-card">
-        <h2 style="margin-bottom: 20px;">Todas las Solicitudes</h2>
-        
-        {% if solicitudes %}
-        <table class="data-table" style="width: 100%;">
-            <thead>
-                <tr style="background: #f5f5f5; border-bottom: 2px solid #667eea;">
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">ID Solicitud</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Cliente</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Tour</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Personas</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Estado</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Fecha</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for solicitud in solicitudes %}
-                <tr style="border-bottom: 1px solid #ecf0f1;">
-                    <td style="padding: 12px;">
-                        <span style="color: #667eea; font-weight: 600;">{{ solicitud.id }}</span>
-                    </td>
-                    <td style="padding: 12px;">{{ solicitud.email or solicitud.nombre or 'N/A' }}</td>
-                    <td style="padding: 12px;">
-                        <span style="background: #ecf0f1; padding: 4px 8px; border-radius: 4px;">
-                            {% if solicitud.tour %}
-                                {{ solicitud.tour.nombre }}
-                            {% else %}
-                                N/A
-                            {% endif %}
-                        </span>
-                    </td>
-                    <td style="padding: 12px;">
-                        {% if solicitud.num_personas %}
-                            <span style="background: #def5f8; color: #16a085; padding: 4px 8px; border-radius: 4px;">
-                                {{ solicitud.num_personas }}
-                            </span>
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                    <td style="padding: 12px;">
-                        <span style="background: 
-                            {% if solicitud.estado == 'confirmada' %}#a9dfbf
-                            {% elif solicitud.estado == 'pendiente' %}#ffeaa7
-                            {% elif solicitud.estado == 'rechazada' %}#fdcccf
-                            {% else %}#d5dbdb
-                            {% endif %};
-                            color: #2c3e50; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;">
-                            {{ solicitud.estado|capitalize }}
-                        </span>
-                    </td>
-                    <td style="padding: 12px; color: #7f8c8d; font-size: 13px;">
-                        {% if solicitud.fecha_solicitud %}
-                            {{ solicitud.fecha_solicitud.strftime('%d/%m/%Y %H:%M') }}
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div style="padding: 40px; text-align: center; color: #95a5a6;">
-            <p style="font-size: 16px;">📭 No hay solicitudes registradas</p>
-        </div>
-        {% endif %}
-    </div>
-
-    <a href="/admin/dashboard" class="btn btn-secondary" style="margin-top: 20px;">← Volver al Dashboard</a>
+  {% if solicitudes %}
+  <div class="table-wrap">
+    <table id="solTable">
+      <thead><tr>
+        <th>#</th><th>Nombre</th><th>Email</th><th>Tour</th><th>Pax</th><th>Mensaje</th><th>Estado</th><th>Fecha</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for s in solicitudes %}
+        <tr data-estado="{{ (s.estado or '')|lower }}"
+            data-search="{{ ((s.nombre_cliente or s.nombre or '') + ' ' + (s.email_cliente or s.email or ''))|lower }}">
+          <td class="td-mono">#{{ s.id }}</td>
+          <td style="font-weight:500;">{{ s.nombre_cliente or s.nombre or '—' }}</td>
+          <td style="color:var(--text2);">{{ s.email_cliente or s.email or '—' }}</td>
+          <td>
+            {% if s.tour %}
+              <span class="tag">{{ s.tour.titulo or s.tour.nombre or '—' }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td><span class="badge badge-blue">{{ s.num_personas or 1 }}</span></td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text2);font-size:12px;">
+            {{ s.mensaje or '—' }}
+          </td>
+          <td>
+            <select class="form-control" style="padding:4px 8px;font-size:11px;width:auto;" onchange="cambiarEstado({{ s.id }}, this)">
+              {% for opt in ['nueva','pendiente','contactado','confirmada','rechazada','cerrado'] %}
+              <option value="{{ opt }}" {% if (s.estado or '')|lower == opt %}selected{% endif %}>{{ opt|capitalize }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          <td style="color:var(--text3);font-size:12px;">
+            {{ s.fecha_solicitud.strftime('%d/%m/%Y') if s.fecha_solicitud else '—' }}
+          </td>
+          <td>
+            <button class="btn btn-ghost btn-sm" onclick="verMensaje({{ s.id }}, `{{ (s.mensaje or '')|replace('`','\\`')|replace('\n','\\n') }}`, `{{ s.nombre_cliente or s.nombre or '' }}`)">
+              <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <svg width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+    <p>No hay solicitudes de tours todavía</p>
+  </div>
+  {% endif %}
 </div>
 
-<style>
-    .content {
-        padding: 20px;
-    }
+<!-- Modal mensaje -->
+<div class="modal-overlay" id="modalMensaje">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-nombre">Mensaje</span>
+      <button class="modal-close" onclick="closeModal('modalMensaje')">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <p id="modal-msg" style="color:var(--text2);font-size:13px;line-height:1.7;white-space:pre-wrap;"></p>
+  </div>
+</div>
+{% endblock %}
 
-    .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 30px;
-    }
+{% block extra_js %}
+<script>
+function filterRows() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const e = document.getElementById('filterEstado').value.toLowerCase();
+  const rows = document.querySelectorAll('#solTable tbody tr');
+  let n = 0;
+  rows.forEach(tr => {
+    const ok = (!q || tr.dataset.search.includes(q)) && (!e || tr.dataset.estado.includes(e));
+    tr.style.display = ok ? '' : 'none';
+    if(ok) n++;
+  });
+  document.getElementById('count-label').textContent = n + ' resultado' + (n===1?'':'s');
+}
 
-    .page-title {
-        font-size: 28px;
-        font-weight: 700;
-        color: #2c3e50;
-        margin: 0;
-    }
+async function cambiarEstado(id, sel) {
+  const nuevo = sel.value;
+  const d = await apiCall(`/admin/solicitudes/${id}/estado`, 'POST', {estado: nuevo});
+  if(d && d.success) {
+    showToast('Estado actualizado', 'success');
+    const tr = sel.closest('tr');
+    if(tr) tr.dataset.estado = nuevo;
+  } else {
+    showToast((d && d.error) || 'Error al actualizar', 'error');
+  }
+}
 
-    .user-info {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-    }
+function verMensaje(id, msg, nombre) {
+  document.getElementById('modal-nombre').textContent = 'Mensaje de ' + (nombre || 'cliente');
+  document.getElementById('modal-msg').textContent = msg || '(sin mensaje)';
+  openModal('modalMensaje');
+}
 
-    .user-avatar {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: #667eea;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-    }
-
-    .logout-btn {
-        padding: 8px 16px;
-        background: #e74c3c;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        text-decoration: none;
-        font-size: 13px;
-        font-weight: 600;
-        transition: all 0.3s;
-    }
-
-    .logout-btn:hover {
-        background: #c0392b;
-    }
-
-    .content-card {
-        background: white;
-        border-radius: 12px;
-        padding: 30px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
-    }
-
-    .data-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .btn {
-        display: inline-block;
-        padding: 10px 20px;
-        border-radius: 6px;
-        text-decoration: none;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s;
-        border: none;
-    }
-
-    .btn-secondary {
-        background: #ecf0f1;
-        color: #2c3e50;
-    }
-
-    .btn-secondary:hover {
-        background: #d5dbdb;
-    }
-</style>
+document.addEventListener('DOMContentLoaded', () => filterRows());
+</script>
 {% endblock %}

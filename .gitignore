@@ -81,6 +81,7 @@ Thumbs.db
 *~
 .~*
 .cache/
+.runtime/
 
 # ============================================
 # Secrets & Credentials

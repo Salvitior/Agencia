@@ -1,253 +1,275 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-################################################################################
-# 🚀 VIATGES CARCAIXENT - INICIADOR COMPLETO
-################################################################################
-# Este script inicia TODO: Docker, BD, API, etc.
-# Ejecuta: ./start_all.sh
-################################################################################
+set -Eeuo pipefail
 
-set -e
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
 
-# Colores
-RED='\033[0;31m'
+APP_LOG="/tmp/agencia_app.log"
+STRIPE_LOG="/tmp/agencia_stripe.log"
+APP_PID_FILE="/tmp/agencia_app.pid"
+STRIPE_PID_FILE="/tmp/agencia_stripe.pid"
+
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-MAGENTA='\033[0;35m'
+RED='\033[0;31m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-# Funciones
-print_header() {
-    echo -e "\n${MAGENTA}╔════════════════════════════════════════╗${NC}"
-    echo -e "${MAGENTA}║ $1${NC}"
-    echo -e "${MAGENTA}╚════════════════════════════════════════╝${NC}\n"
+log() {
+    printf '%b\n' "${CYAN}[$(date +%H:%M:%S)]${NC} $*"
 }
 
-print_step() {
-    echo -e "${CYAN}▶ $1${NC}"
+ok() {
+    printf '%b\n' "${GREEN}OK${NC} $*"
 }
 
-print_success() {
-    echo -e "${GREEN}✅ $1${NC}"
+warn() {
+    printf '%b\n' "${YELLOW}WARN${NC} $*"
 }
 
-print_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
-
-print_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-print_url() {
-    echo -e "${YELLOW}🔗 $1${NC}"
-}
-
-# ============================================================================
-# Verificación de Prerequisitos
-# ============================================================================
-print_header "VERIFICANDO PREREQUISITOS"
-
-# Verificar .env
-if [ ! -f ".env" ]; then
-    print_error ".env no encontrado"
-    print_error "Por favor ejecuta:"
-    echo "  cp .env.example .env"
-    echo "  nano .env  # Edita con tus credenciales"
+fail() {
+    printf '%b\n' "${RED}ERROR${NC} $*" >&2
     exit 1
-fi
-print_success ".env encontrado"
+}
 
-# Verificar Docker
-if ! command -v docker &> /dev/null; then
-    print_error "Docker no está instalado"
-    print_error "Instálalo desde: https://docs.docker.com/get-docker/"
-    exit 1
-fi
-print_success "Docker disponible"
+have_cmd() {
+    command -v "$1" >/dev/null 2>&1
+}
 
-# Verificar Docker Compose (plugin)
-if ! command -v docker compose &> /dev/null; then
-    print_error "Docker Compose plugin no está disponible"
-    print_error "Instálalo: sudo apt-get install docker-compose-plugin"
-    exit 1
-fi
-print_success "docker compose disponible"
+require_file() {
+    [[ -f "$1" ]] || fail "No existe $1"
+}
 
-# Verificar venv
-if [ ! -d "venv" ]; then
-    print_warning "Virtual environment no encontrado"
-    print_step "Creando venv..."
-    python3 -m venv venv
-fi
-print_success "venv listo"
+read_env() {
+    local key="$1"
+    python <<PY
+from dotenv import dotenv_values
+value = dotenv_values(".env").get("$key", "")
+print(value if value is not None else "")
+PY
+}
 
-# ============================================================================
-# Activar Virtual Environment
-# ============================================================================
-print_step "Activando virtual environment..."
-source venv/bin/activate
-print_success "venv activado"
+ensure_runtime_prereqs() {
+    require_file "$ROOT_DIR/.env"
+    require_file "$ROOT_DIR/app.py"
+    [[ -d "$ROOT_DIR/venv" ]] || fail "No existe venv. Ejecuta ./install.sh primero"
+    have_cmd docker || fail "Docker no está instalado"
+    docker compose version >/dev/null 2>&1 || fail "Docker Compose no está disponible"
+}
 
-# ============================================================================
-# Parar Contenedores Anteriores
-# ============================================================================
-print_header "DETENIENDO SERVICIOS ANTERIORES"
+activate_venv() {
+    # shellcheck disable=SC1091
+    source "$ROOT_DIR/venv/bin/activate"
+}
 
-print_step "Parando stack Docker anterior..."
-docker compose down 2>/dev/null || true
-sleep 1
-print_success "Servicios detenidos"
-
-# ============================================================================
-# Iniciar Docker Compose
-# ============================================================================
-print_header "INICIANDO SERVICIOS DOCKER"
-
-print_step "Iniciando PostgreSQL, Redis, y otros servicios..."
-docker compose up -d
-sleep 3
-print_success "Servicios Docker iniciados"
-
-# Verificar que PostgreSQL está listo
-print_step "Esperando a que PostgreSQL esté listo..."
-DB_USER_VALUE="${DB_USER:-postgres}"
-DB_NAME_VALUE="${DB_NAME:-agencia_db}"
-for i in {1..60}; do
-    HEALTH_STATUS=$(docker compose inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' postgres 2>/dev/null || echo "unknown")
-
-    if [ "$HEALTH_STATUS" = "healthy" ]; then
-        print_success "PostgreSQL está listo (healthy)"
-        break
+ensure_python_dependencies() {
+    if python - <<'PY'
+import importlib
+modules = ["flask", "dotenv", "sqlalchemy", "alembic", "redis"]
+missing = []
+for module in modules:
+    try:
+        importlib.import_module(module)
+    except Exception:
+        missing.append(module)
+if missing:
+    print(",".join(missing))
+    raise SystemExit(1)
+PY
+    then
+        ok "Dependencias Python listas"
+        return 0
     fi
 
-    if docker compose exec -T postgres pg_isready -U "$DB_USER_VALUE" -d "$DB_NAME_VALUE" &>/dev/null; then
-        print_success "PostgreSQL responde a pg_isready"
-        break
+    warn "Faltan dependencias Python en el venv; reinstalando requirements.txt"
+    python -m pip install -r "$ROOT_DIR/requirements.txt"
+}
+
+populate_runtime_env() {
+    export DB_HOST="${DB_HOST:-$(read_env DB_HOST)}"
+    export DB_PORT="${DB_PORT:-$(read_env DB_PORT)}"
+    export DB_USER="${DB_USER:-$(read_env DB_USER)}"
+    export DB_PASSWORD="${DB_PASSWORD:-$(read_env DB_PASSWORD)}"
+    export DB_NAME="${DB_NAME:-$(read_env DB_NAME)}"
+    export APP_URL="${APP_URL:-$(read_env APP_URL)}"
+    export FLASK_ENV="${FLASK_ENV:-$(read_env FLASK_ENV)}"
+    export REDIS_HOST="${REDIS_HOST:-$(read_env REDIS_HOST)}"
+    export REDIS_PORT="${REDIS_PORT:-$(read_env REDIS_PORT)}"
+    export REDIS_DB="${REDIS_DB:-$(read_env REDIS_DB)}"
+    export REDIS_URL="${REDIS_URL:-$(read_env REDIS_URL)}"
+    export START_STRIPE_LISTENER="${START_STRIPE_LISTENER:-$(read_env START_STRIPE_LISTENER)}"
+
+    [[ -n "$DB_PASSWORD" ]] || fail "DB_PASSWORD no está configurada en .env"
+    [[ -n "$DB_PORT" ]] || export DB_PORT="5433"
+    [[ -n "$REDIS_HOST" ]] || export REDIS_HOST="localhost"
+    [[ -n "$REDIS_PORT" ]] || export REDIS_PORT="6379"
+    [[ -n "$REDIS_DB" ]] || export REDIS_DB="0"
+    [[ -n "$REDIS_URL" ]] || export REDIS_URL="redis://localhost:6379/0"
+    [[ -n "$APP_URL" ]] || export APP_URL="http://localhost:8000"
+    [[ -n "$START_STRIPE_LISTENER" ]] || export START_STRIPE_LISTENER="false"
+}
+
+stop_previous_app() {
+    if [[ -f "$APP_PID_FILE" ]]; then
+        local pid
+        pid="$(cat "$APP_PID_FILE" 2>/dev/null || true)"
+        if [[ -n "${pid:-}" ]] && kill -0 "$pid" >/dev/null 2>&1; then
+            log "Deteniendo app previa (PID $pid)"
+            kill "$pid" >/dev/null 2>&1 || true
+            sleep 1
+        fi
+        rm -f "$APP_PID_FILE"
     fi
 
-    if [ $i -eq 60 ]; then
-        print_error "PostgreSQL tardó demasiado en iniciar"
-        print_warning "Últimos logs de postgres:"
-        docker compose logs --tail=50 postgres || true
-        exit 1
+    pkill -f "python.*app.py" >/dev/null 2>&1 || true
+    pkill -f "gunicorn.*app:app" >/dev/null 2>&1 || true
+
+    if have_cmd fuser; then
+        fuser -k 8000/tcp >/dev/null 2>&1 || true
     fi
+}
 
-    echo -n "."
-    sleep 1
-done
-echo ""
-
-# ============================================================================
-# Aplicar Migraciones de Base de Datos
-# ============================================================================
-print_header "APLICANDO MIGRACIONES DE BD"
-
-print_step "Ejecutando: alembic upgrade head..."
-python3 -m alembic upgrade head
-print_success "Migraciones aplicadas"
-
-# ============================================================================
-# Iniciar la Aplicación Flask
-# ============================================================================
-print_header "INICIANDO APLICACIÓN FLASK"
-
-print_step "Matando procesos anteriores de Flask..."
-pkill -f "python.*app.py" 2>/dev/null || true
-sleep 1
-
-print_step "Iniciando Flask en segundo plano..."
-nohup python3 app.py > /tmp/agencia_app.log 2>&1 &
-APP_PID=$!
-sleep 2
-
-print_success "Flask iniciado (PID: $APP_PID)"
-
-# ============================================================================
-# Verificaciones Finales
-# ============================================================================
-print_header "VERIFICACIONES FINALES"
-
-# Health Check
-print_step "Verificando health endpoint..."
-for i in {1..10}; do
-    if curl -s http://localhost:8000/health &>/dev/null; then
-        HEALTH=$(curl -s http://localhost:8000/health)
-        print_success "Health: $HEALTH"
-        break
+stop_previous_stripe_listener() {
+    if [[ -f "$STRIPE_PID_FILE" ]]; then
+        local pid
+        pid="$(cat "$STRIPE_PID_FILE" 2>/dev/null || true)"
+        if [[ -n "${pid:-}" ]] && kill -0 "$pid" >/dev/null 2>&1; then
+            log "Deteniendo Stripe listener previo (PID $pid)"
+            kill "$pid" >/dev/null 2>&1 || true
+            sleep 1
+        fi
+        rm -f "$STRIPE_PID_FILE"
     fi
-    if [ $i -eq 10 ]; then
-        print_warning "Health check no respondió (pero puede estar iniciando)"
-    fi
-    echo -n "."
-    sleep 1
-done
-echo ""
+}
 
-# Docker Status
-print_step "Estado de servicios Docker:"
-docker compose ps | tail -n +2 | while read -r line; do
-    if echo "$line" | grep -q "Up"; then
-        echo -e "${GREEN}✅ $line${NC}"
+start_docker_stack() {
+    log "Levantando PostgreSQL, Redis, Prometheus, Grafana y PgAdmin"
+    docker compose up -d postgres redis prometheus grafana pgadmin
+}
+
+wait_for_postgres() {
+    local tries=60
+    local i
+    for ((i=1; i<=tries; i++)); do
+        if docker compose exec -T postgres pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; then
+            ok "PostgreSQL listo"
+            return 0
+        fi
+        sleep 1
+    done
+
+    docker compose logs --tail=100 postgres || true
+    fail "PostgreSQL no respondió a tiempo"
+}
+
+wait_for_redis() {
+    if docker compose exec -T redis redis-cli ping >/dev/null 2>&1; then
+        ok "Redis listo"
+        return 0
+    fi
+    warn "Redis no respondió al ping inicial; la app seguirá arrancando"
+}
+
+run_migrations() {
+    log "Aplicando migraciones Alembic"
+    python -m alembic upgrade head
+    ok "Migraciones aplicadas"
+}
+
+start_application() {
+    log "Arrancando Flask"
+    nohup python app.py >"$APP_LOG" 2>&1 &
+    echo $! >"$APP_PID_FILE"
+    sleep 3
+
+    local pid
+    pid="$(cat "$APP_PID_FILE")"
+    kill -0 "$pid" >/dev/null 2>&1 || {
+        tail -n 50 "$APP_LOG" || true
+        fail "La app no consiguió arrancar"
+    }
+    ok "App arrancada (PID $pid)"
+}
+
+wait_for_healthcheck() {
+    local tries=30
+    local i
+    for ((i=1; i<=tries; i++)); do
+        if curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
+            ok "Healthcheck OK en /health"
+            return 0
+        fi
+        sleep 1
+    done
+
+    tail -n 50 "$APP_LOG" || true
+    fail "La app no respondió en http://localhost:8000/health"
+}
+
+report_stripe_status() {
+    local stripe_public stripe_secret stripe_webhook
+    stripe_public="$(read_env STRIPE_PUBLIC_KEY)"
+    stripe_secret="$(read_env STRIPE_SECRET_KEY)"
+    stripe_webhook="$(read_env STRIPE_WEBHOOK_SECRET)"
+
+    if [[ -n "$stripe_public" && -n "$stripe_secret" && -n "$stripe_webhook" ]]; then
+        ok "Stripe configurado en .env"
     else
-        echo -e "${YELLOW}⏸️  $line${NC}"
+        warn "Stripe no está completamente configurado todavía"
+        warn "Faltan una o más de estas variables: STRIPE_PUBLIC_KEY, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET"
     fi
-done
 
-# Flask Log Check
-print_step "Últimas líneas del log de Flask:"
-tail -n 5 /tmp/agencia_app.log | sed 's/^/  /'
+    if [[ "${START_STRIPE_LISTENER:-false}" == "true" ]]; then
+        if have_cmd stripe; then
+            log "Iniciando stripe listen en segundo plano"
+            nohup stripe listen --forward-to localhost:8000/webhook/stripe >"$STRIPE_LOG" 2>&1 &
+            echo $! >"$STRIPE_PID_FILE"
+            ok "Stripe listener arrancado. Logs en $STRIPE_LOG"
+        else
+            warn "START_STRIPE_LISTENER=true pero el CLI de Stripe no está instalado"
+        fi
+    fi
+}
 
-# ============================================================================
-# Resumen Final
-# ============================================================================
-print_header "🚀 ¡TODO INICIADO!"
+print_summary() {
+    cat <<EOF
 
-echo -e "${GREEN}Servicios Activos:${NC}"
-echo -e "  ✅ PostgreSQL (puerto 5433)"
-echo -e "  ✅ Redis (puerto 6379) [opcional]"
-echo -e "  ✅ Prometheus (puerto 9090)"
-echo -e "  ✅ Grafana (puerto 3000)"
-echo -e "  ✅ PgAdmin (puerto 5050)"
-echo -e "  ✅ Flask API (puerto 8000)"
-echo ""
+Servicios activos:
+  App:        http://localhost:8000
+  Health:     http://localhost:8000/health
+  Webhook:    http://localhost:8000/webhook/stripe
+  PostgreSQL: localhost:${DB_PORT}
+  Redis:      localhost:${REDIS_PORT}
+  Grafana:    http://localhost:3000
+  Prometheus: http://localhost:9090
+  PgAdmin:    http://localhost:5050
 
-echo -e "${YELLOW}ACCESA LA APLICACIÓN:${NC}"
-print_url "http://localhost:8000"
-print_url "http://localhost"
-echo ""
+Logs:
+  App:        $APP_LOG
+  Docker:     docker compose logs -f
+EOF
 
-echo -e "${YELLOW}ADMIN PANEL:${NC}"
-print_url "http://localhost:8000/admin"
-echo ""
+    if [[ -f "$STRIPE_PID_FILE" ]]; then
+        printf '  Stripe:     %s\n' "$STRIPE_LOG"
+    fi
+}
 
-echo -e "${YELLOW}COMANDOS ÚTILES:${NC}"
-echo -e "  ${CYAN}Ver logs${NC}:"
-echo -e "    tail -f /tmp/agencia_app.log"
-echo -e "    docker compose logs -f"
-echo ""
-echo -e "  ${CYAN}Parar todo${NC}:"
-echo -e "    docker compose down"
-echo ""
-echo -e "  ${CYAN}Reiniciar aplicación${NC}:"
-echo -e "    pkill -f 'python.*app.py'; sleep 1; python3 app.py"
-echo ""
-echo -e "  ${CYAN}Base de datos${NC}:"
-echo -e "    psql -h localhost -p 5433 -U agencia_user -d agencia_db"
-echo ""
-echo -e "  ${CYAN}Estado Docker${NC}:"
-echo -e "    docker compose ps"
-echo ""
+main() {
+    ensure_runtime_prereqs
+    activate_venv
+    ensure_python_dependencies
+    populate_runtime_env
+    stop_previous_app
+    stop_previous_stripe_listener
+    start_docker_stack
+    wait_for_postgres
+    wait_for_redis
+    run_migrations
+    start_application
+    wait_for_healthcheck
+    report_stripe_status
+    print_summary
+}
 
-# ============================================================================
-# Menu Interactivo (opcional)
-# ============================================================================
-echo -e "${MAGENTA}════════════════════════════════════════${NC}"
-read -p "¿Ver logs en tiempo real? (s/n): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Ss]$ ]]; then
-    echo -e "${CYAN}Mostrando logs (Ctrl+C para salir)...${NC}\n"
-    tail -f /tmp/agencia_app.log
-fi
+main "$@"

@@ -42,8 +42,8 @@
 
         <div class="index-hero-container">
             <div class="index-hero-text">
-                <span class="index-hero-tag">DISEÑAMOS TUS SUEÑOS</span>
-                <h1>El mundo te espera. <br><span>Nosotros te llevamos.</span></h1>
+                <span class="index-hero-tag">{{ config.get('hero_etiqueta', 'DISEÑAMOS TUS SUEÑOS') }}</span>
+                <h1>{{ config.get('hero_titulo', 'El mundo te espera.') }} <br><span>{{ config.get('hero_titulo_2', 'Nosotros te llevamos.') }}</span></h1>
             </div>
 
             <!-- Buscador simplificado sin pestanas -->

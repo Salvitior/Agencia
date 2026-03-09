@@ -1,416 +1,305 @@
 {% extends "admin_base.html" %}
+{% block title %}Tours{% endblock %}
+{% block page_title %}Gestión de tours{% endblock %}
 
-{% block title %}Gestión de Tours{% endblock %}
+{% block topbar_actions %}
+{% if not editing_tour %}
+<button class="btn btn-primary btn-sm" onclick="toggleForm()">
+  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  Nuevo tour
+</button>
+{% endif %}
+{% endblock %}
 
 {% block content %}
-<div class="content">
-    <div class="header">
-        <h1 class="page-title">Gestión de Tours</h1>
-        <div class="user-info">
-            <div class="user-avatar">{{ current_user.username[0].upper() }}</div>
-            <span>{{ current_user.username }}</span>
-            <a href="/admin/logout" class="logout-btn">Salir</a>
-        </div>
+
+{% if success_message %}
+<div class="alert alert-success">
+  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+  {{ success_message }}
+</div>
+{% endif %}
+{% if error_message %}
+<div class="alert alert-error">
+  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+  {{ error_message }}
+</div>
+{% endif %}
+
+<!-- FORM ALTA / EDICIÓN -->
+<div class="card" id="tourFormCard" style="{% if not editing_tour and not request.args.get('new') %}display:none;{% endif %}">
+  <div class="card-header">
+    <div class="card-title">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+      {% if editing_tour %}Editando tour #{{ editing_tour.id }}{% else %}Nuevo tour{% endif %}
+    </div>
+    {% if not editing_tour %}
+    <button class="btn btn-ghost btn-sm" onclick="toggleForm()">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Cerrar
+    </button>
+    {% endif %}
+  </div>
+
+  <form method="POST" action="/admin/tours">
+    <input type="hidden" name="tour_id" value="{{ form_data.get('tour_id', '') }}">
+
+    <!-- Sección: Identidad -->
+    <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:14px;">Identidad</p>
+    <div class="form-grid cols-3" style="margin-bottom:20px;">
+      <div class="form-group full">
+        <label class="form-label">Nombre del tour <span class="req">*</span></label>
+        <input class="form-control" type="text" name="titulo" required value="{{ form_data.get('titulo','') }}" placeholder="Ej: Tailandia Express 9D">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">URL imagen</label>
+        <input class="form-control" type="url" name="imagen_url" value="{{ form_data.get('imagen_url','') }}" placeholder="https://...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Slug</label>
+        <input class="form-control" type="text" name="slug" value="{{ form_data.get('slug','') }}" placeholder="tailandia-express-9d">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Categoría</label>
+        <input class="form-control" type="text" name="categoria" value="{{ form_data.get('categoria','') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tipo de viaje</label>
+        <input class="form-control" type="text" name="tipo_viaje" value="{{ form_data.get('tipo_viaje','') }}" placeholder="Cultural, Playa, Aventura…">
+      </div>
     </div>
 
-    <div class="content-card" style="margin-bottom: 24px;">
-        <h2 style="margin-bottom: 20px;">
-            {% if editing_tour %}
-            Editar Tour #{{ editing_tour.id }}
-            {% else %}
-            Plantilla de Alta de Tour
-            {% endif %}
-        </h2>
-
-        {% if success_message %}
-        <div class="alert alert-success">✅ {{ success_message }}</div>
-        {% endif %}
-
-        {% if error_message %}
-        <div class="alert alert-error">❌ {{ error_message }}</div>
-        {% endif %}
-
-        <form method="POST" action="/admin/tours" class="tour-form-grid">
-            <input type="hidden" name="tour_id" value="{{ form_data.get('tour_id', '') }}">
-            <div class="field-group">
-                <label>Foto (URL)</label>
-                <input type="url" name="imagen_url" value="{{ form_data.get('imagen_url', '') }}" placeholder="https://...">
-            </div>
-
-            <div class="field-group">
-                <label>Nombre del tour *</label>
-                <input type="text" name="titulo" required value="{{ form_data.get('titulo', '') }}" placeholder="Ej: Tailandia Express 9D">
-            </div>
-
-            <div class="field-group">
-                <label>Duración (días) *</label>
-                <input type="number" min="1" name="duracion_dias" required value="{{ form_data.get('duracion_dias', '') }}">
-            </div>
-
-            <div class="field-group">
-                <label>Precio desde (€) *</label>
-                <input type="number" min="0" step="0.01" name="precio_desde" required value="{{ form_data.get('precio_desde', '') }}">
-            </div>
-
-            <div class="field-group">
-                <label>Precio hasta (€)</label>
-                <input type="number" min="0" step="0.01" name="precio_hasta" value="{{ form_data.get('precio_hasta', '') }}">
-            </div>
-
-            <div class="field-group">
-                <label>Desde dónde se sale *</label>
-                <input type="text" name="ciudad_salida" required value="{{ form_data.get('ciudad_salida', '') }}" placeholder="Valencia">
-            </div>
-
-            <div class="field-group">
-                <label>Origen (opcional)</label>
-                <input type="text" name="origen" value="{{ form_data.get('origen', '') }}" placeholder="España">
-            </div>
-
-            <div class="field-group">
-                <label>Destino</label>
-                <input type="text" name="destino" value="{{ form_data.get('destino', '') }}" placeholder="Tailandia">
-            </div>
-
-            <div class="field-group full-width">
-                <label>Días disponibles (fechas separadas por coma o salto de línea)</label>
-                <textarea name="dias_disponibles" rows="3" placeholder="2026-04-12, 2026-05-10 o 12/04/2026">{{ form_data.get('dias_disponibles', '') }}</textarea>
-            </div>
-
-            <div class="field-group">
-                <label>Plazas por salida</label>
-                <input type="number" min="0" name="plazas_totales" value="{{ form_data.get('plazas_totales', '0') }}">
-            </div>
-
-            <div class="field-group">
-                <label>Tipo de viaje</label>
-                <input type="text" name="tipo_viaje" value="{{ form_data.get('tipo_viaje', '') }}" placeholder="Cultural, Playa, Aventura...">
-            </div>
-
-            <div class="field-group">
-                <label>Nivel confort</label>
-                <input type="text" name="nivel_confort" value="{{ form_data.get('nivel_confort', '') }}" placeholder="Económico, Medio, Premium...">
-            </div>
-
-            <div class="field-group">
-                <label>Categoría</label>
-                <input type="text" name="categoria" value="{{ form_data.get('categoria', '') }}">
-            </div>
-
-            <div class="field-group">
-                <label>Proveedor</label>
-                <input type="text" name="proveedor" value="{{ form_data.get('proveedor', 'manual_admin') }}">
-            </div>
-
-            <div class="field-group">
-                <label>Continente</label>
-                <input type="text" name="continente" value="{{ form_data.get('continente', '') }}">
-            </div>
-
-            <div class="field-group">
-                <label>País</label>
-                <input type="text" name="pais" value="{{ form_data.get('pais', '') }}">
-            </div>
-
-            <div class="field-group">
-                <label>Temporada inicio</label>
-                <input type="text" name="temporada_inicio" value="{{ form_data.get('temporada_inicio', '') }}" placeholder="Abril">
-            </div>
-
-            <div class="field-group">
-                <label>Temporada fin</label>
-                <input type="text" name="temporada_fin" value="{{ form_data.get('temporada_fin', '') }}" placeholder="Octubre">
-            </div>
-
-            <div class="field-group full-width">
-                <label>Descripción</label>
-                <textarea name="descripcion" rows="3">{{ form_data.get('descripcion', '') }}</textarea>
-            </div>
-
-            <div class="field-group full-width">
-                <label>Itinerario *</label>
-                <textarea name="itinerario" rows="5" required>{{ form_data.get('itinerario', '') }}</textarea>
-            </div>
-
-            <div class="field-group full-width">
-                <label>Incluye</label>
-                <textarea name="incluye" rows="3">{{ form_data.get('incluye', '') }}</textarea>
-            </div>
-
-            <div class="field-group full-width">
-                <label>No incluye</label>
-                <textarea name="no_incluye" rows="3">{{ form_data.get('no_incluye', '') }}</textarea>
-            </div>
-
-            <div class="field-group full-width">
-                <label>Keywords SEO (separadas por coma)</label>
-                <input type="text" name="keywords" value="{{ form_data.get('keywords', '') }}" placeholder="tailandia, asia, circuito guiado">
-            </div>
-
-            <div class="field-group">
-                <label>Slug (opcional)</label>
-                <input type="text" name="slug" value="{{ form_data.get('slug', '') }}" placeholder="tailandia-express-9d">
-            </div>
-
-            <div class="field-group checkboxes">
-                <label><input type="checkbox" name="destacado" {% if form_data.get('destacado') == 'on' %}checked{% endif %}> Destacado</label>
-                <label><input type="checkbox" name="activo" {% if form_data.get('activo', 'on') == 'on' %}checked{% endif %}> Activo</label>
-            </div>
-
-            <div class="field-group full-width">
-                <button class="btn btn-primary" type="submit">
-                    {% if editing_tour %}Actualizar tour{% else %}Guardar tour{% endif %}
-                </button>
-                {% if editing_tour %}
-                <a class="btn btn-secondary" href="/admin/tours" style="margin-left: 10px;">Cancelar edición</a>
-                {% endif %}
-            </div>
-        </form>
+    <div class="divider"></div>
+    <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:14px;">Destino y logística</p>
+    <div class="form-grid cols-3" style="margin-bottom:20px;">
+      <div class="form-group">
+        <label class="form-label">Ciudad de salida <span class="req">*</span></label>
+        <input class="form-control" type="text" name="ciudad_salida" required value="{{ form_data.get('ciudad_salida','') }}" placeholder="Valencia">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Origen</label>
+        <input class="form-control" type="text" name="origen" value="{{ form_data.get('origen','') }}" placeholder="España">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Destino</label>
+        <input class="form-control" type="text" name="destino" value="{{ form_data.get('destino','') }}" placeholder="Tailandia">
+      </div>
+      <div class="form-group">
+        <label class="form-label">País</label>
+        <input class="form-control" type="text" name="pais" value="{{ form_data.get('pais','') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Continente</label>
+        <input class="form-control" type="text" name="continente" value="{{ form_data.get('continente','') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Proveedor</label>
+        <input class="form-control" type="text" name="proveedor" value="{{ form_data.get('proveedor','manual_admin') }}">
+      </div>
     </div>
 
-    <div class="content-card" style="margin-bottom: 24px;">
-        <h2 style="margin-bottom: 12px;">Sugerencias basadas en tus tours</h2>
-        {% if tour_suggestions and tour_suggestions|length > 0 %}
-        <ul class="suggestions-list">
-            {% for suggestion in tour_suggestions %}
-            <li>{{ suggestion }}</li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <p style="color: #64748b; margin: 0;">Tus tours tienen buena completitud en los campos analizados.</p>
-        {% endif %}
+    <div class="divider"></div>
+    <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:14px;">Precios y disponibilidad</p>
+    <div class="form-grid cols-3" style="margin-bottom:20px;">
+      <div class="form-group">
+        <label class="form-label">Precio desde (€) <span class="req">*</span></label>
+        <input class="form-control" type="number" min="0" step="0.01" name="precio_desde" required value="{{ form_data.get('precio_desde','') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Precio hasta (€)</label>
+        <input class="form-control" type="number" min="0" step="0.01" name="precio_hasta" value="{{ form_data.get('precio_hasta','') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Duración (días) <span class="req">*</span></label>
+        <input class="form-control" type="number" min="1" name="duracion_dias" required value="{{ form_data.get('duracion_dias','') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Plazas por salida</label>
+        <input class="form-control" type="number" min="0" name="plazas_totales" value="{{ form_data.get('plazas_totales','0') }}">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Temporada inicio</label>
+        <input class="form-control" type="text" name="temporada_inicio" value="{{ form_data.get('temporada_inicio','') }}" placeholder="Abril">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Temporada fin</label>
+        <input class="form-control" type="text" name="temporada_fin" value="{{ form_data.get('temporada_fin','') }}" placeholder="Octubre">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nivel confort</label>
+        <input class="form-control" type="text" name="nivel_confort" value="{{ form_data.get('nivel_confort','') }}" placeholder="Económico, Medio, Premium…">
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Días disponibles (fechas separadas por coma o salto de línea)</label>
+        <textarea class="form-control" name="dias_disponibles" rows="2" placeholder="2026-04-12, 2026-05-10">{{ form_data.get('dias_disponibles','') }}</textarea>
+      </div>
     </div>
 
-    <div class="content-card">
-        <h2 style="margin-bottom: 20px;">Todos los Tours</h2>
-        
-        {% if tours %}
-        <table class="data-table" style="width: 100%;">
-            <thead>
-                <tr style="background: #f5f5f5; border-bottom: 2px solid #667eea;">
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">ID Tour</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Nombre</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Destino</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Precio desde</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Duración</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Salida</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Días cargados</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Fecha Creación</th>
-                    <th style="padding: 12px; text-align: left; font-weight: 600;">Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for tour in tours %}
-                <tr style="border-bottom: 1px solid #ecf0f1;">
-                    <td style="padding: 12px;">
-                        <span style="color: #667eea; font-weight: 600;">{{ tour.id }}</span>
-                    </td>
-                    <td style="padding: 12px;">{{ tour.titulo or 'N/A' }}</td>
-                    <td style="padding: 12px;">
-                        <span style="background: #ecf0f1; padding: 4px 8px; border-radius: 4px;">
-                            {{ tour.destino or 'N/A' }}
-                        </span>
-                    </td>
-                    <td style="padding: 12px;">
-                        <span style="color: #27ae60; font-weight: 600;">
-                            €{{ "%.2f"|format(tour.precio_desde) if tour.precio_desde else 'N/A' }}
-                        </span>
-                    </td>
-                    <td style="padding: 12px;">
-                        {% if tour.duracion_dias %}
-                            {{ tour.duracion_dias }} días
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                    <td style="padding: 12px;">{{ tour.ciudad_salida or 'N/A' }}</td>
-                    <td style="padding: 12px;">{{ tour.salidas|length if tour.salidas else 0 }}</td>
-                    <td style="padding: 12px; color: #7f8c8d; font-size: 13px;">
-                        {% if tour.fecha_creacion %}
-                            {{ tour.fecha_creacion.strftime('%d/%m/%Y') }}
-                        {% else %}
-                            N/A
-                        {% endif %}
-                    </td>
-                    <td style="padding: 12px;">
-                        <a href="/admin/tours?edit_id={{ tour.id }}" class="btn btn-secondary" style="padding: 6px 10px; font-size: 12px;">Editar</a>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div style="padding: 40px; text-align: center; color: #95a5a6;">
-            <p style="font-size: 16px;">🗺️ No hay tours registrados</p>
-        </div>
-        {% endif %}
+    <div class="divider"></div>
+    <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:14px;">Contenido</p>
+    <div class="form-grid" style="margin-bottom:20px;">
+      <div class="form-group full">
+        <label class="form-label">Descripción</label>
+        <textarea class="form-control" name="descripcion" rows="3">{{ form_data.get('descripcion','') }}</textarea>
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Itinerario <span class="req">*</span></label>
+        <textarea class="form-control" name="itinerario" rows="5" required>{{ form_data.get('itinerario','') }}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Incluye</label>
+        <textarea class="form-control" name="incluye" rows="3">{{ form_data.get('incluye','') }}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">No incluye</label>
+        <textarea class="form-control" name="no_incluye" rows="3">{{ form_data.get('no_incluye','') }}</textarea>
+      </div>
+      <div class="form-group full">
+        <label class="form-label">Keywords SEO (separadas por coma)</label>
+        <input class="form-control" type="text" name="keywords" value="{{ form_data.get('keywords','') }}" placeholder="tailandia, asia, circuito guiado">
+      </div>
     </div>
 
-    <a href="/admin/dashboard" class="btn btn-secondary" style="margin-top: 20px;">← Volver al Dashboard</a>
+    <div class="divider"></div>
+    <p style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:14px;">Oferta (visible en /ofertas)</p>
+    <div class="form-grid cols-3" style="margin-bottom:20px;">
+      <div class="form-group">
+        <label class="form-check">
+          <input type="checkbox" name="es_oferta" {% if form_data.get('es_oferta') == 'on' %}checked{% endif %}>
+          <span style="font-size:13px;">Mostrar como oferta</span>
+        </label>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descuento (%)</label>
+        <input class="form-control" type="number" min="0" max="100" step="1" name="descuento_pct" value="{{ form_data.get('descuento_pct','') }}" placeholder="15">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Texto oferta (ej. Últimas plazas)</label>
+        <input class="form-control" type="text" name="texto_oferta" maxlength="120" value="{{ form_data.get('texto_oferta','') }}" placeholder="−40%">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Válida hasta</label>
+        <input class="form-control" type="date" name="fecha_fin_oferta" value="{{ form_data.get('fecha_fin_oferta','') }}">
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div style="display:flex;gap:20px;">
+        <label class="form-check">
+          <input type="checkbox" name="destacado" {% if form_data.get('destacado') == 'on' %}checked{% endif %}>
+          <span style="font-size:13px;">Destacado</span>
+        </label>
+        <label class="form-check">
+          <input type="checkbox" name="activo" {% if form_data.get('activo','on') == 'on' %}checked{% endif %}>
+          <span style="font-size:13px;">Activo (visible en web)</span>
+        </label>
+      </div>
+      <div style="display:flex;gap:10px;">
+        {% if not editing_tour %}<button type="button" class="btn btn-ghost" onclick="toggleForm()">Cancelar</button>{% endif %}
+        {% if editing_tour %}<a href="/admin/tours" class="btn btn-ghost">Cancelar</a>{% endif %}
+        <button type="submit" class="btn btn-primary">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          {% if editing_tour %}Guardar cambios{% else %}Crear tour{% endif %}
+        </button>
+      </div>
+    </div>
+  </form>
 </div>
 
-<style>
-    .content {
-        padding: 20px;
-    }
+<!-- LISTA DE TOURS -->
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      Catálogo actual
+    </div>
+    <div style="position:relative;">
+      <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </span>
+      <input type="text" id="tourSearch" placeholder="Filtrar tours…" oninput="filterTours()"
+        style="padding:6px 12px 6px 30px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-size:13px;font-family:var(--font);outline:none;width:200px;">
+    </div>
+  </div>
 
-    .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 30px;
-    }
+  {% if tours %}
+  <div class="table-wrap">
+    <table id="toursTable">
+      <thead><tr>
+        <th>ID</th><th>Tour</th><th>Destino</th><th>Precio</th><th>Días</th><th>Estado</th><th>Creado</th><th></th>
+      </tr></thead>
+      <tbody>
+        {% for t in tours %}
+        <tr data-search="{{ (t.titulo or '') + ' ' + (t.destino or '') | lower }}">
+          <td class="td-mono">#{{ t.id }}</td>
+          <td>
+            <div style="font-weight:500;">{{ t.titulo or '—' }}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:3px;">
+              {% if t.destacado %}<span class="badge badge-yellow" style="font-size:10px;">Destacado</span>{% endif %}
+              {% if getattr(t, 'es_oferta', False) %}<span class="badge badge-orange" style="font-size:10px;">Oferta</span>{% endif %}
+            </div>
+          </td>
+          <td><span class="tag">{{ t.destino or '—' }}</span></td>
+          <td style="font-weight:600;">
+            €{{ "%.0f"|format(t.precio_desde) if t.precio_desde else '—' }}
+            {% if t.precio_hasta %}<span style="color:var(--text3);font-weight:400;"> – €{{ "%.0f"|format(t.precio_hasta) }}</span>{% endif %}
+          </td>
+          <td style="color:var(--text2);">{{ t.duracion_dias or '—' }}d</td>
+          <td>
+            {% if t.activo %}<span class="badge badge-green">Activo</span>
+            {% else %}<span class="badge badge-gray">Inactivo</span>{% endif %}
+          </td>
+          <td style="color:var(--text3);font-size:12px;">{{ t.fecha_creacion.strftime('%d/%m/%Y') if t.fecha_creacion else '—' }}</td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <a href="/admin/tours?edit_id={{ t.id }}" class="btn btn-ghost btn-sm">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Editar
+              </a>
+              <button class="btn btn-danger btn-sm" onclick="deleteTour({{ t.id }}, '{{ t.titulo|replace("'","\\'")|e }}')">
+                <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+              </button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <svg width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+    <p>No hay tours en el catálogo</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
 
-    .page-title {
-        font-size: 28px;
-        font-weight: 700;
-        color: #2c3e50;
-        margin: 0;
-    }
+{% block extra_js %}
+<script>
+function toggleForm() {
+  const c = document.getElementById('tourFormCard');
+  c.style.display = c.style.display === 'none' ? '' : 'none';
+}
 
-    .user-info {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-    }
+function filterTours() {
+  const q = document.getElementById('tourSearch').value.toLowerCase();
+  document.querySelectorAll('#toursTable tbody tr').forEach(tr => {
+    tr.style.display = !q || tr.dataset.search.includes(q) ? '' : 'none';
+  });
+}
 
-    .user-avatar {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        background: #667eea;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-    }
+async function deleteTour(id, nombre) {
+  if(!confirm(`¿Eliminar el tour "${nombre}"? Esta acción no se puede deshacer.`)) return;
+  const d = await apiCall(`/admin/tours/${id}/delete`, 'POST');
+  if(d && d.success) { showToast('Tour eliminado', 'success'); setTimeout(()=>location.reload(), 800); }
+  else { showToast((d && d.error) || 'Error al eliminar', 'error'); }
+}
 
-    .logout-btn {
-        padding: 8px 16px;
-        background: #e74c3c;
-        color: white;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        text-decoration: none;
-        font-size: 13px;
-        font-weight: 600;
-        transition: all 0.3s;
-    }
-
-    .logout-btn:hover {
-        background: #c0392b;
-    }
-
-    .content-card {
-        background: white;
-        border-radius: 12px;
-        padding: 30px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
-    }
-
-    .tour-form-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-    }
-
-    .field-group {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-    }
-
-    .field-group.full-width {
-        grid-column: 1 / -1;
-    }
-
-    .field-group label {
-        font-size: 13px;
-        font-weight: 600;
-        color: #334155;
-    }
-
-    .field-group input,
-    .field-group textarea {
-        border: 1px solid #dbe2ea;
-        border-radius: 8px;
-        padding: 10px 12px;
-        font-size: 14px;
-    }
-
-    .field-group.checkboxes {
-        flex-direction: row;
-        align-items: center;
-        gap: 14px;
-        padding-top: 22px;
-    }
-
-    .alert {
-        border-radius: 8px;
-        padding: 10px 14px;
-        margin-bottom: 14px;
-        font-size: 14px;
-    }
-
-    .alert-success {
-        background: #ecfdf5;
-        color: #065f46;
-        border: 1px solid #bbf7d0;
-    }
-
-    .alert-error {
-        background: #fef2f2;
-        color: #991b1b;
-        border: 1px solid #fecaca;
-    }
-
-    .suggestions-list {
-        margin: 0;
-        padding-left: 20px;
-        color: #334155;
-    }
-
-    .data-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .btn {
-        display: inline-block;
-        padding: 10px 20px;
-        border-radius: 6px;
-        text-decoration: none;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s;
-        border: none;
-    }
-
-    .btn-secondary {
-        background: #ecf0f1;
-        color: #2c3e50;
-    }
-
-    .btn-secondary:hover {
-        background: #d5dbdb;
-    }
-
-    .btn-primary {
-        background: #667eea;
-        color: #fff;
-    }
-
-    .btn-primary:hover {
-        background: #596ad6;
-    }
-
-    @media (max-width: 980px) {
-        .tour-form-grid {
-            grid-template-columns: 1fr;
-        }
-    }
-</style>
+// Auto-open form if ?new=1 in URL
+if(new URLSearchParams(location.search).get('new')) {
+  document.getElementById('tourFormCard').style.display = '';
+}
+</script>
 {% endblock %}

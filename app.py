@@ -45,7 +45,7 @@ except ImportError:
 # 0. CONFIGURACIÓN INICIAL Y LOGS
 # ==========================================
 
-# ⚠️ IMPORTANTE: load_dotenv() DEBE estar ANTES de crear instancias
+# [WARN] IMPORTANTE: load_dotenv() DEBE estar ANTES de crear instancias
 # que leen variables de entorno (MotorBusqueda, AmadeusAdapter, etc.)
 load_dotenv()
 
@@ -82,7 +82,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.json = CustomJSONProvider(app) # ✅ Apply Custom Provider
+app.json = CustomJSONProvider(app) # [OK] Apply Custom Provider
 
 CALENDAR_PRICE_CACHE = {}
 CALENDAR_PRICE_CACHE_TTL = int(os.getenv('CALENDAR_PRICE_CACHE_TTL_SECONDS', '86400'))
@@ -109,15 +109,15 @@ import secrets
 SECRET_KEY = os.getenv("SECRET_KEY")
 if not SECRET_KEY:
     if os.getenv("FLASK_ENV") == "production":
-        logger.critical("⚠️ SECRET_KEY es OBLIGATORIA en producción!")
+        logger.critical("[WARN] SECRET_KEY es OBLIGATORIA en producción!")
         raise SystemExit("SECRET_KEY no configurada")
     else:
         SECRET_KEY = secrets.token_hex(32)
-        logger.warning(f"⚠️ Usando SECRET_KEY temporal (solo desarrollo): {SECRET_KEY[:16]}...")
+        logger.warning(f"[WARN] Usando SECRET_KEY temporal (solo desarrollo): {SECRET_KEY[:16]}...")
 
 app.config['SECRET_KEY'] = SECRET_KEY
 
-# 🔐 VALIDACIÓN CRÍTICA: DUFFEL_API_TOKEN
+# [SEC] VALIDACIÓN CRÍTICA: DUFFEL_API_TOKEN
 # ==========================================
 DUFFEL_TOKEN = os.getenv("DUFFEL_API_TOKEN")
 DUFFEL_ACCOUNT_ID = os.getenv("DUFFEL_ACCOUNT_ID", "")
@@ -135,12 +135,12 @@ if not DUFFEL_TOKEN or DUFFEL_TOKEN.strip() == "":
     logger.critical("   1. Agregar DUFFEL_API_TOKEN=your_token_here a .env")
     logger.critical("   2. Reiniciar la aplicación")
     if os.getenv("FLASK_ENV") == "production":
-        raise SystemExit("❌ FATAL: DUFFEL_API_TOKEN no configurada en producción")
+        raise SystemExit("[ERROR] FATAL: DUFFEL_API_TOKEN no configurada en producción")
     else:
         logger.warning("   (En desarrollo, continuando pero búsquedas devolverán lista vacía)")
 else:
-    logger.info(f"✅ DUFFEL_API_TOKEN configurado (primeros 10 chars: {DUFFEL_TOKEN[:10]}...)")
-    logger.info(f"✅ DUFFEL_DASHBOARD_URL: {DUFFEL_DASHBOARD_URL}")
+    logger.info(f"[OK] DUFFEL_API_TOKEN configurado (primeros 10 chars: {DUFFEL_TOKEN[:10]}...)")
+    logger.info(f"[OK] DUFFEL_DASHBOARD_URL: {DUFFEL_DASHBOARD_URL}")
 
 # ==========================================
 # FEATURE FLAGS
@@ -215,9 +215,9 @@ swagger_config_obj = {
 # Inicializar Swagger
 try:
     swagger = Swagger(app, config=swagger_config_obj, template=swagger_template)
-    logger.info("✅ Swagger UI habilitado en /api/docs")
+    logger.info("[OK] Swagger UI habilitado en /api/docs")
 except Exception as e:
-    logger.warning(f"⚠️ No se pudo inicializar Swagger: {e}")
+    logger.warning(f"[WARN] No se pudo inicializar Swagger: {e}")
 
 
 # ==========================================
@@ -230,17 +230,29 @@ try:
     from database import (
         get_db_session, get_db_connection,
         ReservaVuelo, DuffelSearch, Tour, SalidaTour, Pedido, SolicitudTour, Usuario,
-        init_db
+        ConfigWeb, init_db
     )
     from core.matrix_adapter import MatrixOrchestrator
     from core.security import descifrar, cifrar, generar_hash_dni
     from core.invoice_pro import generar_factura_pdf
     
-    logger.info("✅ Core Cargado: Base de Datos, Cifrado AES-256 y PDF Engine listos.")
+    logger.info("[OK] Core Cargado: Base de Datos, Cifrado AES-256 y PDF Engine listos.")
     orchestrator = MatrixOrchestrator()
 except ImportError as e:
-    logger.error(f"❌ Error cargando Core: {e}. El panel de administración estará limitado.")
+    logger.error(f"[ERROR] Error cargando Core: {e}. El panel de administración estará limitado.")
     orchestrator = None
+
+
+def get_config_web():
+    """Devuelve un diccionario clave -> valor con la configuración editable de la web."""
+    try:
+        db = get_db_session()
+        rows = db.query(ConfigWeb).all()
+        out = {r.clave: (r.valor or '') for r in rows}
+        db.close()
+        return out
+    except Exception:
+        return {}
 
 
 def _parse_json_field(value, default=None):
@@ -269,9 +281,9 @@ def _parse_pasajeros(reserva):
 # B) Motor de Búsqueda de Vuelos (Scraper/API)
 try:
     from core.scraper_motor import MotorBusqueda
-    logger.info("✅ Motor de Búsqueda (Vuelos API) activo.")
+    logger.info("[OK] Motor de Búsqueda (Vuelos API) activo.")
 except ImportError as e:
-    logger.warning(f"⚠️ Motor de Búsqueda no encontrado: {e}")
+    logger.warning(f"[WARN] Motor de Búsqueda no encontrado: {e}")
     MotorBusqueda = None
 
 
@@ -284,16 +296,16 @@ def check_auth(username, password):
     ADMIN_USER = os.getenv("ADMIN_USER")
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
     
-    # ✅ Validar que están configuradas
+    # [OK] Validar que están configuradas
     if not ADMIN_USER or not ADMIN_PASSWORD:
-        logger.critical("⚠️ ADMIN_USER y ADMIN_PASSWORD deben estar definidos en .env")
+        logger.critical("[WARN] ADMIN_USER y ADMIN_PASSWORD deben estar definidos en .env")
         return False
     
     is_valid = username == ADMIN_USER and password == ADMIN_PASSWORD
     if is_valid:
         logger.info(f"🔑 Acceso Admin autorizado desde {request.remote_addr}")
     else:
-        logger.warning(f"⛔ Acceso Admin denegado: {username} desde {request.remote_addr}")
+        logger.warning(f"[DENY] Acceso Admin denegado: {username} desde {request.remote_addr}")
     return is_valid
 
 def requires_auth(f):
@@ -340,7 +352,7 @@ def autocomplete_api():
                 if sugerencias:
                     return jsonify(sugerencias)
             except Exception as e:
-                logger.error(f"❌ Error en Autocomplete API: {e}")
+                logger.error(f"[ERROR] Error en Autocomplete API: {e}")
 
     # 2. Fallback local mejorado (ES/EN)
     resultados_fallback = buscar_fallback_es(termino)
@@ -363,7 +375,7 @@ def buscar_vuelos_api():
         data = request.json
         logger.info(f"🔎 Buscando vuelos: {data.get('origen')} -> {data.get('destino')} para el {data.get('fecha')}")
         logger.info(f"👥 Pasajeros: {data.get('adultos', 1)} adultos, {data.get('ninos', 0)} niños, {data.get('bebes', 0)} bebés")
-        logger.info(f"✈️ Clase: {data.get('clase', 'economy')}")
+        logger.info(f"[FLIGHT] Clase: {data.get('clase', 'economy')}")
 
         resultados_duffel = []
         resultados_amadeus = []
@@ -394,7 +406,7 @@ def buscar_vuelos_api():
             resultados_duffel = [v for v in (resultados_duffel_raw or []) if _es_vuelo_real(v)]
             descartados = max(0, len(resultados_duffel_raw or []) - len(resultados_duffel))
             if descartados:
-                logger.warning(f"⚠️ Se descartaron {descartados} ofertas ficticias de Duffel")
+                logger.warning(f"[WARN] Se descartaron {descartados} ofertas ficticias de Duffel")
 
         # FASE TEMPORAL: Amadeus oculto (comentado, no eliminado)
         # if amadeus_disponible:
@@ -458,7 +470,7 @@ def buscar_vuelos_api():
             resultados = resultados[:SEARCH_RESULTS_LIMIT]
 
         logger.info(
-            f"✅ Búsqueda combinada: Duffel={len(resultados_duffel)} | Amadeus={len(resultados_amadeus)} | Final={len(resultados)} | Top={SEARCH_RESULTS_LIMIT} | DeltaDuffel={DUFFEL_PRIORITY_DELTA_PERCENT}%"
+            f"[OK] Búsqueda combinada: Duffel={len(resultados_duffel)} | Amadeus={len(resultados_amadeus)} | Final={len(resultados)} | Top={SEARCH_RESULTS_LIMIT} | DeltaDuffel={DUFFEL_PRIORITY_DELTA_PERCENT}%"
         )
 
         try:
@@ -482,11 +494,11 @@ def buscar_vuelos_api():
             finally:
                 db.close()
         except Exception as log_err:
-            logger.warning(f"⚠️ No se pudo registrar busqueda Duffel: {log_err}")
+            logger.warning(f"[WARN] No se pudo registrar busqueda Duffel: {log_err}")
         return jsonify(resultados)
 
     except Exception as e:
-        logger.error(f"❌ Error crítico en API Búsqueda: {e}")
+        logger.error(f"[ERROR] Error crítico en API Búsqueda: {e}")
         return jsonify([]), 500
 
 
@@ -590,7 +602,7 @@ def _load_top_calendar_routes_from_history(limit=40):
         finally:
             db.close()
     except Exception as err:
-        logger.warning(f"⚠️ No se pudieron cargar rutas top para prewarm: {err}")
+        logger.warning(f"[WARN] No se pudieron cargar rutas top para prewarm: {err}")
 
     return routes
 
@@ -660,7 +672,7 @@ def _build_calendar_prices(origen, destino, year, month, adultos, ninos, bebes, 
                     if precios_validos:
                         prices[fecha_iso] = int(min(precios_validos))
             except Exception as err:
-                logger.warning(f"⚠️ Error precio calendario {origen}->{destino} {fecha_iso}: {err}")
+                logger.warning(f"[WARN] Error precio calendario {origen}->{destino} {fecha_iso}: {err}")
 
         cursor += timedelta(days=1)
 
@@ -675,7 +687,7 @@ def _get_calendar_prices_from_cache(cache_key):
             if isinstance(cached, dict):
                 return cached
         except Exception as err:
-            logger.warning(f"⚠️ Error leyendo caché Redis calendario: {err}")
+            logger.warning(f"[WARN] Error leyendo caché Redis calendario: {err}")
 
     now_ts = time.time()
     cached_local = CALENDAR_PRICE_CACHE.get(cache_key)
@@ -691,19 +703,19 @@ def _set_calendar_prices_cache(cache_key, prices):
         try:
             shared_redis_cache.set(redis_key, prices, ttl=CALENDAR_PRICE_CACHE_TTL)
         except Exception as err:
-            logger.warning(f"⚠️ Error guardando caché Redis calendario: {err}")
+            logger.warning(f"[WARN] Error guardando caché Redis calendario: {err}")
 
     CALENDAR_PRICE_CACHE[cache_key] = {'ts': time.time(), 'prices': prices}
 
 
 def refresh_calendar_prices_daily():
     if motor is None or not DUFFEL_TOKEN:
-        logger.warning("⚠️ Refresh diario de calendario omitido: motor/token no disponibles")
+        logger.warning("[WARN] Refresh diario de calendario omitido: motor/token no disponibles")
         return
 
     routes = _list_tracked_calendar_routes()
     if not routes:
-        logger.info("ℹ️ Refresh diario de calendario: sin rutas registradas aún")
+        logger.info("[INFO] Refresh diario de calendario: sin rutas registradas aún")
         return
 
     now = datetime.now(timezone.utc)
@@ -721,7 +733,7 @@ def refresh_calendar_prices_daily():
             prices = _build_calendar_prices(origen, destino, year, month, adultos, ninos, bebes, clase)
             _set_calendar_prices_cache(cache_key, prices)
 
-    logger.info("✅ Refresh diario de calendario completado")
+    logger.info("[OK] Refresh diario de calendario completado")
 
 
 def process_auto_checkin_queue():
@@ -749,7 +761,7 @@ def process_auto_checkin_queue():
                 reserva.notas = f"{nota} {reserva.notas or ''}".strip()
 
                 if getattr(reserva, 'email_cliente', None):
-                    asunto = f"✅ Check-in abierto para tu reserva {reserva.codigo_reserva}"
+                    asunto = f"[OK] Check-in abierto para tu reserva {reserva.codigo_reserva}"
                     html = f"""
                     <h2>Tu check-in ya está disponible</h2>
                     <p>Reserva: <strong>{reserva.codigo_reserva}</strong></p>
@@ -764,12 +776,12 @@ def process_auto_checkin_queue():
 
             if procesadas:
                 db.commit()
-                logger.info(f"✅ Auto-checkin monitor: {procesadas} reservas actualizadas")
+                logger.info(f"[OK] Auto-checkin monitor: {procesadas} reservas actualizadas")
         finally:
             db.close()
 
     except Exception as e:
-        logger.error(f"❌ Error en monitor auto-checkin: {e}")
+        logger.error(f"[ERROR] Error en monitor auto-checkin: {e}")
 
 
 def _init_calendar_scheduler():
@@ -789,10 +801,10 @@ def _init_calendar_scheduler():
         )
         jobs_added += 1
         logger.info(
-            f"✅ Job diario precios calendario activo ({CALENDAR_REFRESH_HOUR:02d}:{CALENDAR_REFRESH_MINUTE:02d} UTC, TTL {CALENDAR_PRICE_CACHE_TTL}s)"
+            f"[OK] Job diario precios calendario activo ({CALENDAR_REFRESH_HOUR:02d}:{CALENDAR_REFRESH_MINUTE:02d} UTC, TTL {CALENDAR_PRICE_CACHE_TTL}s)"
         )
     else:
-        logger.info("ℹ️ Refresh diario de calendario deshabilitado por configuración")
+        logger.info("[INFO] Refresh diario de calendario deshabilitado por configuración")
 
     if AUTO_CHECKIN_ENABLED:
         scheduler.add_job(
@@ -803,10 +815,10 @@ def _init_calendar_scheduler():
             replace_existing=True
         )
         jobs_added += 1
-        logger.info(f"✅ Monitor auto-checkin activo (cada {AUTO_CHECKIN_SCAN_MINUTES} min)")
+        logger.info(f"[OK] Monitor auto-checkin activo (cada {AUTO_CHECKIN_SCAN_MINUTES} min)")
 
     if jobs_added == 0:
-        logger.info("ℹ️ Sin jobs de scheduler activos")
+        logger.info("[INFO] Sin jobs de scheduler activos")
         return
 
     scheduler.start()
@@ -826,7 +838,7 @@ def obtener_asientos_vuelo(offer_id):
         else:
             return jsonify({'success': False, 'error': 'No se pudo obtener el mapa de asientos'}), 404
     except Exception as e:
-        logger.error(f"❌ Error en API Asientos: {e}")
+        logger.error(f"[ERROR] Error en API Asientos: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -876,7 +888,7 @@ def obtener_detalles_vuelo(offer_id):
         return jsonify({'success': False, 'error': 'No se pudieron obtener detalles'}), 404
             
     except Exception as e:
-        logger.error(f"❌ Error endpoint detalles vuelo: {e}")
+        logger.error(f"[ERROR] Error endpoint detalles vuelo: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -891,6 +903,9 @@ def cancelar_orden_api():
     """
     Cancela una orden en Duffel. Solo ADMIN.
     """
+    if not current_user.is_authenticated or getattr(current_user, 'rol', None) != 'admin':
+        logger.warning(f"[DENY] Acceso denegado a cancelar-orden: usuario {getattr(current_user, 'username', '?')} sin rol admin")
+        return jsonify({'error': 'Acceso restringido a administradores'}), 403
     try:
         data = request.json
         order_id = data.get('order_id')
@@ -916,7 +931,7 @@ def cancelar_orden_api():
         resultado = motor.cancelar_orden(order_id)
         
         if resultado['success']:
-            logger.info(f"✅ Orden {order_id} cancelada exitosamente")
+            logger.info(f"[OK] Orden {order_id} cancelada exitosamente")
             # Actualizar DB si fuera necesario
             if reserva_id:
                 session = get_db_session()
@@ -934,7 +949,7 @@ def cancelar_orden_api():
             return jsonify(resultado), 400
             
     except Exception as e:
-        logger.error(f"❌ Error cancelando orden: {e}")
+        logger.error(f"[ERROR] Error cancelando orden: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -951,7 +966,6 @@ def crear_reserva_vuelo():
         offer_id = data.get('offer_id')
         datos_vuelo = data.get('datos_vuelo', {})
         proveedor = str(datos_vuelo.get('source', 'Duffel'))
-        proveedor_meta = proveedor.lower()
         proveedor_meta = proveedor.lower()
         pasajeros = data.get('pasajeros', [])
         amadeus_offer = data.get('amadeus_full_offer') or datos_vuelo.get('amadeus_full_offer') or datos_vuelo.get('amadeus_offer')
@@ -1048,7 +1062,7 @@ def crear_reserva_vuelo():
             reserva_id = reserva.id
             session.close()
             
-            logger.info(f"✅ Reserva creada: {codigo_reserva} (ID: {reserva_id})")
+            logger.info(f"[OK] Reserva creada: {codigo_reserva} (ID: {reserva_id})")
             
             return jsonify({
                 'success': True,
@@ -1063,17 +1077,21 @@ def crear_reserva_vuelo():
             raise e
             
     except Exception as e:
-        logger.error(f"❌ Error creando reserva: {e}")
+        logger.error(f"[ERROR] Error creando reserva: {e}")
         return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/vuelos/confirmar-directo', methods=['POST'])
-@login_required  # 🔒 SEGURIDAD AÑADIDA: SOLO ADMIN
+@login_required  # 🔒 SEGURIDAD: SOLO ADMIN
 def confirmar_vuelo_directo():
     """
     Confirma una reserva directamente usando el saldo de Duffel (Agency Balance).
-    REQUIERE AUTENTICACIÓN.
+    REQUIERE AUTENTICACIÓN DE ADMIN.
     """
+    # Verificar que el usuario tiene rol admin
+    if not current_user.is_authenticated or getattr(current_user, 'rol', None) != 'admin':
+        logger.warning(f"[DENY] Acceso denegado a confirmar-directo: usuario {getattr(current_user, 'username', '?')} sin rol admin")
+        return jsonify({'error': 'Acceso restringido a administradores'}), 403
     session = None
     try:
         data = request.json
@@ -1092,7 +1110,7 @@ def confirmar_vuelo_directo():
         reserva.estado = 'Procesando en Duffel...'
         session.commit()
         
-        logger.info(f"🚀 Iniciando confirmación directa Duffel para: {reserva.codigo_reserva}")
+        logger.info(f"[START] Iniciando confirmación directa Duffel para: {reserva.codigo_reserva}")
         
         pasajeros_data = json.loads(reserva.pasajeros)
         
@@ -1146,7 +1164,7 @@ def confirmar_vuelo_directo():
             return jsonify({'success': False, 'error': resultado['error']}), 400
             
     except Exception as e:
-        logger.error(f"❌ Excepción confirmar directo: {e}")
+        logger.error(f"[ERROR] Excepción confirmar directo: {e}")
         return jsonify({'error': str(e)}), 500
     finally:
         if session:
@@ -1241,7 +1259,7 @@ def checkout_page(codigo_reserva):
         )
 
         if stripe_resp.status_code >= 400:
-            logger.error(f"❌ Stripe Checkout Duffel error {stripe_resp.status_code}: {stripe_resp.text}")
+            logger.error(f"[ERROR] Stripe Checkout Duffel error {stripe_resp.status_code}: {stripe_resp.text}")
             return "No se pudo iniciar Stripe Checkout", 502
 
         stripe_data = stripe_resp.json()
@@ -1333,7 +1351,7 @@ def duffel_create_checkout_session():
         )
 
         if stripe_resp.status_code >= 400:
-            logger.error(f"❌ Stripe Checkout Duffel error {stripe_resp.status_code}: {stripe_resp.text}")
+            logger.error(f"[ERROR] Stripe Checkout Duffel error {stripe_resp.status_code}: {stripe_resp.text}")
             return jsonify({'error': 'No se pudo crear la sesión de pago'}), 502
 
         stripe_data = stripe_resp.json()
@@ -1344,7 +1362,7 @@ def duffel_create_checkout_session():
         return jsonify({'success': True, 'url': stripe_data.get('url')})
 
     except Exception as e:
-        logger.error(f"❌ Error creando checkout Duffel: {e}")
+        logger.error(f"[ERROR] Error creando checkout Duffel: {e}")
         return jsonify({'error': str(e)}), 500
     finally:
         if session:
@@ -1444,7 +1462,7 @@ def amadeus_create_checkout_session():
         )
 
         if stripe_resp.status_code >= 400:
-            logger.error(f"❌ Stripe Checkout error {stripe_resp.status_code}: {stripe_resp.text}")
+            logger.error(f"[ERROR] Stripe Checkout error {stripe_resp.status_code}: {stripe_resp.text}")
             return jsonify({'error': 'No se pudo crear la sesión de pago'}), 502
 
         stripe_data = stripe_resp.json()
@@ -1455,7 +1473,7 @@ def amadeus_create_checkout_session():
         return jsonify({'success': True, 'url': stripe_data.get('url')})
 
     except Exception as e:
-        logger.error(f"❌ Error creando checkout Amadeus: {e}")
+        logger.error(f"[ERROR] Error creando checkout Amadeus: {e}")
         return jsonify({'error': str(e)}), 500
     finally:
         if session:
@@ -1489,7 +1507,7 @@ def amadeus_pago_exito(codigo_reserva):
 
         return render_template('pending_manual_payment.html', reserva=reserva)
     except Exception as e:
-        logger.error(f"❌ Error en pago éxito Amadeus: {e}")
+        logger.error(f"[ERROR] Error en pago éxito Amadeus: {e}")
         return "Error confirmando pago", 500
     finally:
         if session:
@@ -1506,7 +1524,7 @@ def _notify_duffel_balance_issue(reserva, error_text):
             or ''
         ).strip()
         if not alert_to:
-            logger.warning("⚠️ No hay email de alerta configurado para incidencias de balance Duffel")
+            logger.warning("[WARN] No hay email de alerta configurado para incidencias de balance Duffel")
             return False
 
         subject = f"🚨 Duffel Balance insuficiente - {reserva.codigo_reserva}"
@@ -1524,7 +1542,7 @@ def _notify_duffel_balance_issue(reserva, error_text):
         """
         return email_manager.send_email(alert_to, subject, body)
     except Exception as e:
-        logger.error(f"❌ Error enviando alerta de balance Duffel: {e}")
+        logger.error(f"[ERROR] Error enviando alerta de balance Duffel: {e}")
         return False
 
 
@@ -1560,7 +1578,7 @@ def _emitir_reserva_duffel_balance(reserva, session, stripe_session_id=None):
                 currency_order = str(offer_currency).upper()
     except Exception as e_offer:
         logger.warning(
-            f"⚠️ No se pudo obtener monto real del offer {reserva.offer_id_duffel}: {e_offer}. "
+            f"[WARN] No se pudo obtener monto real del offer {reserva.offer_id_duffel}: {e_offer}. "
             f"Se usa monto local {amount_order} {currency_order}"
         )
 
@@ -1594,7 +1612,7 @@ def _emitir_reserva_duffel_balance(reserva, session, stripe_session_id=None):
         try:
             email_manager.send_flight_tickets(reserva, resultado.get('order_data', {}))
         except Exception as e_mail:
-            logger.error(f"⚠️ Error enviando email de billetes Duffel: {e_mail}")
+            logger.error(f"[WARN] Error enviando email de billetes Duffel: {e_mail}")
 
         return {'success': True, 'booking_reference': reserva.booking_reference}
 
@@ -1607,7 +1625,7 @@ def _emitir_reserva_duffel_balance(reserva, session, stripe_session_id=None):
         reserva.estado = 'ERROR'
     reserva.error_mensaje = f"Pago Stripe OK, error emitiendo Duffel: {error_text}"
     session.commit()
-    logger.error(f"❌ Error emitiendo Duffel para {reserva.codigo_reserva}: {error_text}")
+    logger.error(f"[ERROR] Error emitiendo Duffel para {reserva.codigo_reserva}: {error_text}")
     return {'success': False, 'error': error_text}
 
 
@@ -1626,26 +1644,39 @@ def stripe_webhook():
         webhook_secret = os.getenv('STRIPE_WEBHOOK_SECRET', '').strip()
 
         if not webhook_secret:
-            logger.warning("⚠️ STRIPE_WEBHOOK_SECRET no configurada")
+            logger.warning("[WARN] STRIPE_WEBHOOK_SECRET no configurada")
             return jsonify({'error': 'Webhook no configurado'}), 501
 
-        # Verificar firma de Stripe
+        # Verificar firma de Stripe (robusto: soporta múltiples firmas v1)
         try:
-            timestamp = sig_header.split(',')[0].split('=')[1]
-            signature = sig_header.split(',')[1].split('=')[1]
-            
+            # Extraer timestamp y todas las firmas v1 del header
+            sig_parts = {}
+            v1_signatures = []
+            for part in sig_header.split(','):
+                if '=' in part:
+                    key, value = part.split('=', 1)
+                    key = key.strip()
+                    if key == 't':
+                        sig_parts['t'] = value.strip()
+                    elif key == 'v1':
+                        v1_signatures.append(value.strip())
+
+            timestamp = sig_parts.get('t')
+            if not timestamp or not v1_signatures:
+                raise ValueError("Header Stripe-Signature malformado")
+
             signed_content = f"{timestamp}.{payload}"
             computed_sig = hmac.new(
                 webhook_secret.encode(),
                 signed_content.encode(),
                 hashlib.sha256
             ).hexdigest()
-            
-            if not hmac.compare_digest(computed_sig, signature):
-                logger.warning("❌ Firma Stripe inválida")
+
+            if not any(hmac.compare_digest(computed_sig, sig) for sig in v1_signatures):
+                logger.warning("[ERROR] Firma Stripe inválida")
                 return jsonify({'error': 'Firma inválida'}), 401
         except Exception as e:
-            logger.warning(f"⚠️ Error verificando firma Stripe: {e}")
+            logger.warning(f"[WARN] Error verificando firma Stripe: {e}")
             return jsonify({'error': 'Firma inválida'}), 401
 
         # Procesar evento
@@ -1667,22 +1698,22 @@ def stripe_webhook():
                 return jsonify({'status': 'ok'}), 200
 
             logger.info(
-                f"💳 Stripe checkout Duffel completado: session={session_id} reserva={codigo_reserva} status={payment_status}"
+                f"[PAY] Stripe checkout Duffel completado: session={session_id} reserva={codigo_reserva} status={payment_status}"
             )
 
             if payment_status != 'paid':
-                logger.warning(f"⚠️ Checkout Duffel no pagado para {codigo_reserva}: {payment_status}")
+                logger.warning(f"[WARN] Checkout Duffel no pagado para {codigo_reserva}: {payment_status}")
                 return jsonify({'status': 'ok'}), 200
 
             session = get_db_session()
             try:
                 reserva = session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
                 if not reserva:
-                    logger.warning(f"❌ Reserva Duffel {codigo_reserva} no encontrada")
+                    logger.warning(f"[ERROR] Reserva Duffel {codigo_reserva} no encontrada")
                     return jsonify({'status': 'ok'}), 200
 
                 if reserva.estado == 'CONFIRMADO' and reserva.order_id_duffel:
-                    logger.info(f"ℹ️ Reserva {codigo_reserva} ya confirmada (idempotente)")
+                    logger.info(f"[INFO] Reserva {codigo_reserva} ya confirmada (idempotente)")
                     return jsonify({'status': 'ok'}), 200
 
                 _emitir_reserva_duffel_balance(reserva, session, stripe_session_id=session_id)
@@ -1703,11 +1734,11 @@ def stripe_webhook():
             codigo_reserva = metadata.get('codigo_reserva')
             proveedor = (metadata.get('proveedor', 'unknown') or '').lower()
 
-            logger.info(f"💳 Payment Intent completado: {intent_id} | Reserva: {codigo_reserva}")
+            logger.info(f"[PAY] Payment Intent completado: {intent_id} | Reserva: {codigo_reserva}")
 
             # Solo procesar reservas Amadeus
             if proveedor != 'amadeus' or not codigo_reserva:
-                logger.info(f"ℹ️ Evento no es para Amadeus o sin código_reserva, ignorando")
+                logger.info(f"[INFO] Evento no es para Amadeus o sin código_reserva, ignorando")
                 return jsonify({'status': 'ok'}), 200
 
             # Buscar reserva
@@ -1716,12 +1747,12 @@ def stripe_webhook():
                 reserva = session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
                 
                 if not reserva:
-                    logger.warning(f"❌ Reserva {codigo_reserva} no encontrada")
+                    logger.warning(f"[ERROR] Reserva {codigo_reserva} no encontrada")
                     return jsonify({'error': 'Reserva no encontrada'}), 404
 
                 # Verificar que esté en estado correcto
                 if reserva.estado != 'PAGADO_PENDIENTE_EMISION':
-                    logger.warning(f"⚠️ Reserva {codigo_reserva} ya procesada o en estado {reserva.estado}")
+                    logger.warning(f"[WARN] Reserva {codigo_reserva} ya procesada o en estado {reserva.estado}")
                     return jsonify({'status': 'ok'}), 200
 
                 # Iniciar emisión automática en background
@@ -1738,7 +1769,7 @@ def stripe_webhook():
             metadata = intent_obj.get('metadata', {})
             
             codigo_reserva = metadata.get('codigo_reserva')
-            logger.warning(f"❌ Payment Intent falló: {intent_id} | Reserva: {codigo_reserva}")
+            logger.warning(f"[ERROR] Payment Intent falló: {intent_id} | Reserva: {codigo_reserva}")
 
             # Actualizar estado a error si aplica
             if codigo_reserva:
@@ -1756,7 +1787,7 @@ def stripe_webhook():
         return jsonify({'status': 'ok'}), 200
 
     except Exception as e:
-        logger.error(f"❌ Error en webhook Stripe: {e}")
+        logger.error(f"[ERROR] Error en webhook Stripe: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1765,6 +1796,8 @@ def stripe_webhook():
 @limiter.limit("20 per hour")
 def reintentar_emision_balance_duffel():
     """Reintenta emisión Duffel usando balance para reservas ya pagadas."""
+    if not current_user.is_authenticated or getattr(current_user, 'rol', None) != 'admin':
+        return jsonify({'error': 'Acceso restringido a administradores'}), 403
     session = None
     try:
         payload = request.json or {}
@@ -1803,7 +1836,7 @@ def reintentar_emision_balance_duffel():
         }), 409
 
     except Exception as e:
-        logger.error(f"❌ Error reintentando emisión Duffel por balance: {e}")
+        logger.error(f"[ERROR] Error reintentando emisión Duffel por balance: {e}")
         return jsonify({'error': str(e)}), 500
     finally:
         if session:
@@ -1813,12 +1846,8 @@ def reintentar_emision_balance_duffel():
 def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
     """
     Emite Amadeus PNR de forma asintrónica post-pago con validación de precio.
-    Pasos:
-    1. Validar que el precio no cambió
-    2. Crear orden con oferta completa
-    3. Emitir tickets
-    4. Enviar email de confirmación
     """
+    new_session = None
     try:
         logger.info(f"🎫 Iniciando emisión automática para {codigo_reserva}")
 
@@ -1829,7 +1858,7 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
         reserva = new_session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
 
         if not reserva:
-            logger.error(f"❌ Reserva desapareció: {codigo_reserva}")
+            logger.error(f"[ERROR] Reserva desapareció: {codigo_reserva}")
             new_session.close()
             return
 
@@ -1846,7 +1875,7 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
 
         # Verificar que sea Amadeus
         if datos_vuelo.get('source') != 'Amadeus':
-            logger.warning(f"⚠️ {codigo_reserva} no es Amadeus, cancelando emisión")
+            logger.warning(f"[WARN] {codigo_reserva} no es Amadeus, cancelando emisión")
             new_session.close()
             return
 
@@ -1860,7 +1889,7 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
 
         # Si no tenemos la oferta completa, no podemos proceder
         if not amadeus_full_offer:
-            logger.error(f"❌ Oferta Amadeus completa no encontrada para {codigo_reserva}")
+            logger.error(f"[ERROR] Oferta Amadeus completa no encontrada para {codigo_reserva}")
             reserva.estado = 'EMITIDO_CON_ERROR'
             reserva.error_mensaje = 'Oferta completa no disponible - no se puede crear orden'
             new_session.commit()
@@ -1874,8 +1903,8 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
         pricing_result = amadeus_motor.validar_pricing_amadeus([amadeus_full_offer])
 
         if not pricing_result.get('success'):
-            logger.warning(f"⚠️ Validación de precio falló: {pricing_result.get('error')}")
-            reserva.notas = (reserva.notas or '') + " | ⚠️ Precio no validado"
+            logger.warning(f"[WARN] Validación de precio falló: {pricing_result.get('error')}")
+            reserva.notas = (reserva.notas or '') + " | [WARN] Precio no validado"
         else:
             precio_changed = pricing_result.get('changed', False)
             new_price = pricing_result.get('new_price', precio_original)
@@ -1885,14 +1914,14 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
             reserva.amadeus_full_pricing = json.dumps(pricing_result.get('pricing_data', {}))
 
             if precio_changed and abs(difference) > 0.01:
-                logger.error(f"❌ Precio cambió significativamente: ${precio_original} → ${new_price}")
+                logger.error(f"[ERROR] Precio cambió significativamente: ${precio_original} → ${new_price}")
                 reserva.estado = 'EMITIDO_CON_ERROR'
                 reserva.error_mensaje = f'Precio cambió: ${precio_original} → ${new_price}'
                 new_session.commit()
                 new_session.close()
                 return
 
-            logger.info(f"✅ Precio validado: ${new_price}")
+            logger.info(f"[OK] Precio validado: ${new_price}")
 
         # PASO 2: Crear orden Amadeus
         email_pasajero = reserva.email_cliente or 'no-email@agencia.local'
@@ -1909,10 +1938,10 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
 
         if not orden_result.get('success'):
             error_msg = orden_result.get('error', 'Error creando orden')
-            logger.error(f"❌ Error creando orden Amadeus: {error_msg}")
+            logger.error(f"[ERROR] Error creando orden Amadeus: {error_msg}")
             reserva.estado = 'EMITIDO_CON_ERROR'
             reserva.error_mensaje = f'Error en orden: {error_msg[:100]}'
-            reserva.notas = (reserva.notas or '') + f" | ❌ Orden error: {error_msg}"
+            reserva.notas = (reserva.notas or '') + f" | [ERROR] Orden error: {error_msg}"
             new_session.commit()
             new_session.close()
             return
@@ -1932,16 +1961,16 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
                 if remark.get('subType') == 'TICKETING_AGREEMENT':
                     reserva.ticketingAgreement = json.dumps(remark)
 
-        logger.info(f"✅ Orden Amadeus creada: {order_id} (PNR: {pnr})")
+        logger.info(f"[OK] Orden Amadeus creada: {order_id} (PNR: {pnr})")
         reserva.notas = (reserva.notas or '') + f" | Orden: {order_id} PNR: {pnr}"
 
         # PASO 3A: Recuperar orden (para obtener info fresca antes de emitir)
-        logger.info(f"🔄 Recuperando orden para verificación antes de emitir...")
+        logger.info(f"[SYNC] Recuperando orden para verificación antes de emitir...")
         recuperar_result = amadeus_motor.recuperar_orden_amadeus(order_id)
         if not recuperar_result.get('success'):
-            logger.warning(f"⚠️ No se pudo recuperar orden para verificación: {recuperar_result.get('error')}")
+            logger.warning(f"[WARN] No se pudo recuperar orden para verificación: {recuperar_result.get('error')}")
         else:
-            logger.info(f"✅ Orden recuperada correctamente")
+            logger.info(f"[OK] Orden recuperada correctamente")
 
         # PASO 3B: Emitir tickets
         logger.info(f"🎫 Emitiendo eTickets para orden {order_id} (PNR: {pnr})...")
@@ -1949,7 +1978,7 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
 
         if not ticket_result.get('success'):
             error_msg = ticket_result.get('error', 'Error emitiendo tickets')
-            logger.warning(f"⚠️ Error emitiendo tickets (continuando con orden creada): {error_msg}")
+            logger.warning(f"[WARN] Error emitiendo tickets (continuando con orden creada): {error_msg}")
             
             # En sandbox/test, aceptamos que la emisión falle pero registramos la orden como EMITIDA
             # ya que la orden se creó exitosamente en Amadeus
@@ -1960,8 +1989,8 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
             }]
             ticket_nums = [f"TEST-{pnr}-001"]
             
-            reserva.notas = (reserva.notas or '') + f" | ⚠️ Test Sandbox: Tickets pending in sandbox mode"
-            logger.info(f"ℹ️ Orden creada en sandbox, tickets_numbers registrados como pending")
+            reserva.notas = (reserva.notas or '') + f" | [WARN] Test Sandbox: Tickets pending in sandbox mode"
+            logger.info(f"[INFO] Orden creada en sandbox, tickets_numbers registrados como pending")
         else:
             tickets = ticket_result.get('tickets', [])
             ticket_nums = [t.get('ticketNumber', 'N/A') for t in tickets]
@@ -1973,10 +2002,10 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
 
         # PASO 4: Actualizar estado a EMITIDO
         reserva.estado = 'EMITIDO'
-        reserva.notas = (reserva.notas or '') + f" | ✅ Emitido - Tickets: {','.join(ticket_nums)}"
+        reserva.notas = (reserva.notas or '') + f" | [OK] Emitido - Tickets: {','.join(ticket_nums)}"
 
         new_session.commit()
-        logger.info(f"✅ {codigo_reserva} emitido exitosamente")
+        logger.info(f"[OK] {codigo_reserva} emitido exitosamente")
 
         # PASO 5: Enviar email de confirmación
         try:
@@ -1987,21 +2016,25 @@ def _emitir_amadeus_background(codigo_reserva, reserva, db_session):
                 tickets
             )
         except Exception as e_email:
-            logger.warning(f"⚠️ Error enviando email confirmación: {e_email}")
+            logger.warning(f"[WARN] Error enviando email confirmación: {e_email}")
 
     except Exception as e:
-        logger.error(f"❌ Error en emisión de fondo: {e}", exc_info=True)
-        try:
-            reserva.estado = 'EMITIDO_CON_ERROR'
-            reserva.error_mensaje = str(e)[:200]
-            new_session.commit()
-        except Exception:
-            pass
+        logger.error(f"[ERROR] Error en emisión de fondo: {e}", exc_info=True)
+        if new_session:
+            try:
+                reserva_err = new_session.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
+                if reserva_err:
+                    reserva_err.estado = 'EMITIDO_CON_ERROR'
+                    reserva_err.error_mensaje = str(e)[:200]
+                    new_session.commit()
+            except Exception:
+                pass
     finally:
-        try:
-            new_session.close()
-        except Exception:
-            pass
+        if new_session:
+            try:
+                new_session.close()
+            except Exception:
+                pass
 
 
 # ==========================================
@@ -2041,7 +2074,7 @@ def amadeus_seatmap(offer_id):
         result = amadeus_motor.obtener_seatmap(offer_id, 'DEPARTURE')
         return jsonify(result)
     except Exception as e:
-        logger.error(f"❌ Error obteniendo seatmap: {e}")
+        logger.error(f"[ERROR] Error obteniendo seatmap: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2054,7 +2087,7 @@ def amadeus_upsell(offer_id):
         result = amadeus_motor.obtener_ofertas_upsell(offer_id)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"❌ Error obteniendo ofertas upsell: {e}")
+        logger.error(f"[ERROR] Error obteniendo ofertas upsell: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2080,7 +2113,7 @@ def amadeus_availability():
         )
         return jsonify(result)
     except Exception as e:
-        logger.error(f"❌ Error buscando disponibilidad: {e}")
+        logger.error(f"[ERROR] Error buscando disponibilidad: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2103,7 +2136,7 @@ def amadeus_locations():
         result = amadeus_motor.buscar_aeropuertos(keyword, subtype)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"❌ Error buscando ubicaciones: {e}")
+        logger.error(f"[ERROR] Error buscando ubicaciones: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2123,7 +2156,7 @@ def amadeus_nearest_airports():
         result = amadeus_motor.aeropuertos_cercanos(latitude, longitude, radius)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"❌ Error buscando aeropuertos cercanos: {e}")
+        logger.error(f"[ERROR] Error buscando aeropuertos cercanos: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2140,7 +2173,7 @@ def amadeus_routes(codigo_aeropuerto):
         result = amadeus_motor.rutas_directas(codigo_aeropuerto)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"❌ Error obteniendo rutas: {e}")
+        logger.error(f"[ERROR] Error obteniendo rutas: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2159,7 +2192,7 @@ def amadeus_airlines():
         result = amadeus_motor.obtener_aerolineas(codigos_list)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"❌ Error obteniendo aerolíneas: {e}")
+        logger.error(f"[ERROR] Error obteniendo aerolíneas: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2183,7 +2216,7 @@ def amadeus_flight_status():
         result = amadeus_motor.obtener_estado_vuelo(carrier_code, flight_number, departure_date)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"❌ Error obteniendo estado del vuelo: {e}")
+        logger.error(f"[ERROR] Error obteniendo estado del vuelo: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2200,7 +2233,7 @@ def amadeus_checkin_links(codigo_aerolinea):
         result = amadeus_motor.obtener_links_checkin(codigo_aerolinea)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"❌ Error obteniendo enlaces de check-in: {e}")
+        logger.error(f"[ERROR] Error obteniendo enlaces de check-in: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2221,7 +2254,7 @@ def amadeus_get_order(order_id):
         result = amadeus_motor.recuperar_orden_amadeus(order_id)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"❌ Error recuperando orden: {e}")
+        logger.error(f"[ERROR] Error recuperando orden: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2238,7 +2271,7 @@ def amadeus_cancel_order(order_id):
         result = amadeus_motor.cancelar_orden_amadeus(order_id)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"❌ Error cancelando orden: {e}")
+        logger.error(f"[ERROR] Error cancelando orden: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -2257,7 +2290,7 @@ def amadeus_price_check():
         result = amadeus_motor.validar_pricing_amadeus(flight_offers)
         return jsonify(result)
     except Exception as e:
-        logger.error(f"❌ Error validando precio: {e}")
+        logger.error(f"[ERROR] Error validando precio: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ==========================================
@@ -2373,16 +2406,14 @@ def api_buscar_tours():
         # FILTROS DINÁMICOS
         search = request.args.get('search', '').strip()
         if search:
-            # ✅ OPTIMIZADO: Full-text search con ranking (100x más rápido)
+            # [OK] SEGURO: plainto_tsquery acepta texto libre sin sintaxis especial
+            # to_tsquery falla con caracteres como '&', '|', '!', '(', paréntesis, acentos mal formados
             from sqlalchemy import func as sqlfunc
-            
-            # Convertir búsqueda a formato tsquery
-            search_query = ' & '.join(search.split())
-            
+
             query = query.filter(
-                sqlfunc.to_tsquery('spanish', search_query).op('@@')(Tour.search_vector)
+                sqlfunc.plainto_tsquery('spanish', search).op('@@')(Tour.search_vector)
             ).order_by(
-                sqlfunc.ts_rank(Tour.search_vector, sqlfunc.to_tsquery('spanish', search_query)).desc()
+                sqlfunc.ts_rank(Tour.search_vector, sqlfunc.plainto_tsquery('spanish', search)).desc()
             )
         
         # Filtro por continente
@@ -2526,7 +2557,7 @@ def api_tours_destacados():
         limit = int(request.args.get('limit', 6))
         limit = min(limit, 20)  # Máximo 20
         
-        # ✅ OPTIMIZADO: Single query ordenada (evita doble query)
+        # [OK] OPTIMIZADO: Single query ordenada (evita doble query)
         tours = db.query(Tour).filter_by(
             activo=True
         ).order_by(
@@ -2734,7 +2765,7 @@ def home():
         
         db = get_db_session()
         
-        # ✅ OPTIMIZADO: Random sin SCAN completo (mucho más rápido)
+        # [OK] OPTIMIZADO: Random sin SCAN completo (mucho más rápido)
         import random as py_random
         
         # Obtener total de tours activos
@@ -2785,7 +2816,8 @@ def home():
         if db:
             db.close()
     
-    return render_template('index.html', viajes=viajes, tours_destacados=tours_destacados)
+    config_web = get_config_web()
+    return render_template('index.html', viajes=viajes, tours_destacados=tours_destacados, config=config_web)
 
 @app.route('/legal')
 def legal():
@@ -2883,18 +2915,27 @@ def cruceros():
 
 @app.route('/ofertas')
 def ofertas():
-    """Página de Ofertas: Muestra viajes marcados como oferta o baratos"""
+    """Página de Ofertas: Muestra viajes marcados como oferta en el panel admin"""
     viajes = []
     db = None
     try:
         db = get_db_session()
         filtros = _build_tour_filters(db)
-        # Lógica simple: si precio < 500 o tiene etiqueta oferta (si existiera)
-        viajes = db.query(Tour).filter(
-            Tour.activo == True,
-            Tour.precio_desde < 800
-        ).order_by(Tour.precio_desde.asc()).limit(20).all()
+        from datetime import date as date_type
+        hoy = date_type.today()
+        # Prioridad: tours con es_oferta=True y vigentes (fecha_fin_oferta >= hoy o null)
+        q = db.query(Tour).filter(Tour.activo == True)
+        if hasattr(Tour, 'es_oferta'):
+            q = q.filter(Tour.es_oferta == True)
+            q = q.filter((Tour.fecha_fin_oferta == None) | (Tour.fecha_fin_oferta >= hoy))
+        viajes = q.order_by(Tour.precio_desde.asc()).limit(30).all()
         viajes = [v.to_dict() for v in viajes]
+        # Fallback: si no hay ofertas definidas, mostrar tours baratos (precio < 800)
+        if not viajes and hasattr(Tour, 'es_oferta'):
+            viajes = db.query(Tour).filter(
+                Tour.activo == True, Tour.precio_desde < 800
+            ).order_by(Tour.precio_desde.asc()).limit(20).all()
+            viajes = [v.to_dict() for v in viajes]
     except Exception as e:
         logger.error(f"Error en ofertas: {e}")
         filtros = {'continentes': [], 'proveedores': [], 'tipos': [],
@@ -2907,9 +2948,11 @@ def ofertas():
 @app.route('/contacto')
 def contacto():
     """Página de Contacto"""
-    return render_template('contacto.html')
+    config_web = get_config_web()
+    return render_template('contacto.html', config=config_web)
 
-@app.route('/presupuesto.html')
+@app.route('/presupuesto')
+@app.route('/presupuesto.html')  # compatibilidad con enlaces antiguos
 def presupuesto():
     return render_template('presupuesto.html')
 
@@ -3055,24 +3098,39 @@ def _resolve_airline_checkin_url(reserva):
 def success():
     """Página de agradecimiento post-pago"""
     try:
-        reserva_id = request.args.get('reserva_id')
+        # Stripe redirige con codigo_reserva (no reserva_id)
+        codigo_reserva = request.args.get('codigo_reserva', '').strip()
+        reserva_id = request.args.get('reserva_id', '').strip()
         booking_ref = None
         checkin_date = None
         
-        if reserva_id:
+        lookup_param = None
+        lookup_by = None
+        if codigo_reserva:
+            lookup_by = 'codigo'
+        elif reserva_id:
+            lookup_by = 'id'
+
+        if lookup_by:
             db = get_db_session()
             try:
-                reserva = db.query(ReservaVuelo).filter_by(id=reserva_id).first()
+                if lookup_by == 'codigo':
+                    reserva = db.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
+                else:
+                    reserva = db.query(ReservaVuelo).filter_by(id=reserva_id).first()
                 
                 if reserva:
-                    if reserva.notas and 'Booking Ref:' in reserva.notas:
-                        booking_ref = reserva.notas.split('Booking Ref: ')[1].strip()
+                    # Intentar obtener booking_ref del campo dedicado primero
+                    if reserva.booking_reference:
+                        booking_ref = reserva.booking_reference.strip()
+                    elif reserva.notas and 'Booking Ref:' in reserva.notas:
+                        booking_ref = reserva.notas.split('Booking Ref: ')[1].split('|')[0].strip()
                     
-                    # Calculate check-in date (24h before flight)
+                    # Calcular fecha check-in (24h antes del vuelo)
                     try:
                         if reserva.datos_vuelo:
                             datos = json.loads(reserva.datos_vuelo)
-                            fecha_ida = datos.get('fecha_ida') # YYYY-MM-DD
+                            fecha_ida = datos.get('fecha_ida')  # YYYY-MM-DD
                             if fecha_ida:
                                 flight_date = datetime.strptime(fecha_ida, '%Y-%m-%d')
                                 checkin_open = flight_date - timedelta(hours=24)
@@ -3086,10 +3144,10 @@ def success():
             return render_template('success.html', booking_ref=booking_ref, checkin_date=checkin_date)
             
         # Fallback simple template
-        html = "<h1>¡Gracias por tu compra! Tu viaje comienza ahora. ✈️</h1>"
+        html = "<h1>¡Gracias por tu compra! Tu viaje comienza ahora. [FLIGHT]</h1>"
         if booking_ref:
             html += f"<div style='background:#f0fdf4; padding:20px; border:1px solid #bbf7d0; border-radius:8px; margin:20px 0;'>"
-            html += f"<h2>✅ Tu Localizador de Reserva: <strong>{booking_ref}</strong></h2>"
+            html += f"<h2>[OK] Tu Localizador de Reserva: <strong>{booking_ref}</strong></h2>"
             html += f"<p>Usa este código en la web de la aerolínea para hacer el Check-in online.</p>"
             if checkin_date:
                 html += f"<p><strong>Nota:</strong> El check-in abre el {checkin_date}</p>"
@@ -3114,7 +3172,7 @@ def save_identity():
                 checkin_date=None,
                 checkin_url=None,
                 pasajeros=[],
-                message="⚠️ El servicio de auto-checkin no está disponible temporalmente.",
+                message="[WARN] El servicio de auto-checkin no está disponible temporalmente.",
                 message_type="error"
             )
 
@@ -3169,7 +3227,7 @@ def save_identity():
                 checkin_date=checkin_date,
                 checkin_url=checkin_url,
                 pasajeros=pasajeros,
-                message="✅ Datos guardados. Te avisaremos automáticamente cuando se abra el check-in.",
+                message="[OK] Datos guardados. Te avisaremos automáticamente cuando se abra el check-in.",
                 message_type="success"
             )
         else:
@@ -3180,7 +3238,7 @@ def save_identity():
                 checkin_date=checkin_date,
                 checkin_url=checkin_url,
                 pasajeros=pasajeros,
-                message="⚠️ No se pudieron guardar los datos de identidad. Verifica los campos e inténtalo otra vez.",
+                message="[WARN] No se pudieron guardar los datos de identidad. Verifica los campos e inténtalo otra vez.",
                 message_type="error"
             )
             
@@ -3212,8 +3270,17 @@ def checkin():
             try:
                 db = get_db_session()
                 try:
-                    # Buscar por código y email por seguridad
-                    reserva = db.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva, email_cliente=email).first()
+                    reserva = db.query(ReservaVuelo).filter_by(
+                        codigo_reserva=codigo_reserva,
+                        email_cliente=email
+                    ).first()
+
+                    # Si no encuentra, intentar con email en mayúsculas/minúsculas (normalizar)
+                    if not reserva:
+                        reserva = db.query(ReservaVuelo).filter(
+                            ReservaVuelo.codigo_reserva == codigo_reserva,
+                            ReservaVuelo.email_cliente.ilike(email)
+                        ).first()
                     
                     if not reserva:
                         message = "No se ha encontrado ninguna reserva con esos datos."
@@ -3501,10 +3568,22 @@ def descargar_factura(id_factura):
         factura = cursor.fetchone()
         conn.close()
 
-        if factura and factura['url_archivo_pdf'] and os.path.exists(factura['url_archivo_pdf']):
-            return send_file(factura['url_archivo_pdf'], as_attachment=True)
-        
-        return "Factura no encontrada o archivo físico eliminado", 404
+        if not factura or not factura['url_archivo_pdf']:
+            return "Factura no encontrada", 404
+
+        # Sanitizar path: solo permitir archivos dentro del directorio de facturas
+        facturas_dir = os.path.realpath(os.path.join(os.path.dirname(__file__), 'facturas'))
+        pdf_path = os.path.realpath(factura['url_archivo_pdf'])
+
+        # Verificar que el archivo está dentro del directorio permitido (evitar path traversal)
+        if not pdf_path.startswith(facturas_dir + os.sep) and not pdf_path.startswith(facturas_dir):
+            logger.warning(f"[WARN] Intento de path traversal en factura {id_factura}: {pdf_path}")
+            return "Acceso denegado", 403
+
+        if not os.path.exists(pdf_path):
+            return "Archivo físico no encontrado", 404
+
+        return send_file(pdf_path, as_attachment=True)
     except Exception as e:
         logger.error(f"Error descargando factura {id_factura}: {e}")
         return "Error al procesar la descarga", 500
@@ -3731,7 +3810,7 @@ try:
             email_service.enviar_solicitud_tour(solicitud_data, tour_data)
             email_service.enviar_confirmacion_cliente(data['email'], data['nombre'], tour.titulo)
 
-            logger.info(f"✅ Solicitud de tour creada: {solicitud.id}")
+            logger.info(f"[OK] Solicitud de tour creada: {solicitud.id}")
 
             return jsonify({
                 'success': True,
@@ -3750,27 +3829,30 @@ try:
     @app.route('/admin/login', methods=['GET', 'POST'])
     def admin_login():
         """Login para el panel de administración"""
-        # Auto-create admin user if doesn't exist (development)
+        # Auto-create admin user solo en desarrollo y si hay ADMIN_PASSWORD configurado
         if request.method == 'GET':
-            db = get_db_session()
-            try:
-                admin_exists = db.query(Usuario).filter_by(username='admin').first()
-                if not admin_exists:
-                    admin_user = Usuario(
-                        username='admin',
-                        password_hash=generate_password_hash('password'),
-                        email='admin@agencia.local',
-                        rol='admin',
-                        activo=True
-                    )
-                    db.add(admin_user)
-                    db.commit()
-                    app.logger.info("Admin user created: admin / password")
-            except Exception as e:
-                app.logger.error(f"Error creating admin: {e}")
-                db.rollback()
-            finally:
-                db.close()
+            flask_env = os.getenv('FLASK_ENV', 'production')
+            dev_password = os.getenv('ADMIN_PASSWORD', '').strip()
+            if flask_env == 'development' and dev_password:
+                db = get_db_session()
+                try:
+                    admin_exists = db.query(Usuario).filter_by(username='admin').first()
+                    if not admin_exists:
+                        admin_user = Usuario(
+                            username='admin',
+                            password_hash=generate_password_hash(dev_password),
+                            email='admin@agencia.local',
+                            rol='admin',
+                            activo=True
+                        )
+                        db.add(admin_user)
+                        db.commit()
+                        app.logger.info("Admin user created from ADMIN_PASSWORD env var")
+                except Exception as e:
+                    app.logger.error(f"Error creating admin: {e}")
+                    db.rollback()
+                finally:
+                    db.close()
         
         if request.method == 'POST':
             data = request.json if request.is_json else request.form
@@ -3841,7 +3923,7 @@ try:
         try:
             reserva = db.query(ReservaVuelo).filter_by(codigo_reserva=codigo_reserva).first()
             if not reserva:
-                return render_template('error.html', mensaje='Reserva no encontrada'), 404
+                return render_template('error.html', titulo='Reserva no encontrada', mensaje=f'No existe ninguna reserva con código {codigo_reserva}.'), 404
             
             # Parse JSON fields
             try:
@@ -4160,6 +4242,10 @@ try:
                     'slug': tour_obj.slug or '',
                     'destacado': 'on' if tour_obj.destacado else '',
                     'activo': 'on' if tour_obj.activo else '',
+                    'es_oferta': 'on' if getattr(tour_obj, 'es_oferta', False) else '',
+                    'descuento_pct': str(tour_obj.descuento_pct) if getattr(tour_obj, 'descuento_pct', None) not in (None, '') else '',
+                    'texto_oferta': getattr(tour_obj, 'texto_oferta', None) or '',
+                    'fecha_fin_oferta': tour_obj.fecha_fin_oferta.strftime('%Y-%m-%d') if getattr(tour_obj, 'fecha_fin_oferta', None) else '',
                 }
 
             edit_id = (request.args.get('edit_id') or '').strip()
@@ -4245,7 +4331,13 @@ try:
                     tour.slug = slug
                     tour.destacado = form_data.get('destacado') == 'on'
                     tour.activo = form_data.get('activo') == 'on'
+                    tour.es_oferta = form_data.get('es_oferta') == 'on'
+                    tour.descuento_pct = _parse_float(form_data.get('descuento_pct'), 'Descuento') if form_data.get('descuento_pct') else None
+                    tour.texto_oferta = (form_data.get('texto_oferta') or '').strip() or None
+                    fe = (form_data.get('fecha_fin_oferta') or '').strip()
+                    tour.fecha_fin_oferta = datetime.strptime(fe, '%Y-%m-%d').date() if fe else None
                 else:
+                    fe_offer = (form_data.get('fecha_fin_oferta') or '').strip()
                     tour = Tour(
                         titulo=titulo,
                         descripcion=(form_data.get('descripcion') or '').strip() or None,
@@ -4270,7 +4362,11 @@ try:
                         keywords=(form_data.get('keywords') or '').strip() or None,
                         slug=slug,
                         destacado=form_data.get('destacado') == 'on',
-                        activo=form_data.get('activo') == 'on'
+                        activo=form_data.get('activo') == 'on',
+                        es_oferta=form_data.get('es_oferta') == 'on',
+                        descuento_pct=_parse_float(form_data.get('descuento_pct'), 'Descuento') if form_data.get('descuento_pct') else None,
+                        texto_oferta=(form_data.get('texto_oferta') or '').strip() or None,
+                        fecha_fin_oferta=datetime.strptime(fe_offer, '%Y-%m-%d').date() if fe_offer else None,
                     )
                     db.add(tour)
                     db.flush()
@@ -4377,7 +4473,7 @@ try:
 
         except Exception as e:
             db.rollback()
-            logger.error(f"❌ Error en admin_tours: {e}")
+            logger.error(f"[ERROR] Error en admin_tours: {e}")
             tours = db.query(Tour).order_by(Tour.fecha_actualizacion.desc()).all()
             return render_template(
                 'admin_tours.html',
@@ -4391,6 +4487,158 @@ try:
 
         finally:
             db.close()
+
+    @app.route('/admin/ofertas', methods=['GET', 'POST'])
+    @login_required
+    def admin_ofertas():
+        """Gestión de ofertas: listar, crear y editar ofertas desde tours."""
+        db = get_db_session()
+        try:
+            from datetime import date as date_type
+            success_message = None
+            error_message = None
+            if request.method == 'POST':
+                action = request.form.get('action', 'save')
+                tour_id_raw = (request.form.get('tour_id') or '').strip()
+                if action == 'quitar' and request.form.get('tour_id_quitar'):
+                    try:
+                        tid = int(request.form.get('tour_id_quitar'))
+                        t = db.query(Tour).filter_by(id=tid).first()
+                        if t:
+                            t.es_oferta = False
+                            t.descuento_pct = None
+                            t.texto_oferta = None
+                            t.fecha_fin_oferta = None
+                            db.commit()
+                            success_message = f'Oferta quitada de "{t.titulo}".'
+                        else:
+                            error_message = 'Tour no encontrado.'
+                    except ValueError:
+                        error_message = 'ID de tour inválido.'
+                elif tour_id_raw:
+                    try:
+                        tour_id = int(tour_id_raw)
+                        tour = db.query(Tour).filter_by(id=tour_id).first()
+                        if not tour:
+                            error_message = 'Tour no encontrado.'
+                        else:
+                            tour.es_oferta = True
+                            desc = request.form.get('descuento_pct', '').strip()
+                            tour.descuento_pct = float(desc.replace(',', '.')) if desc else None
+                            tour.texto_oferta = (request.form.get('texto_oferta') or '').strip() or None
+                            fe = request.form.get('fecha_fin_oferta', '').strip()
+                            if fe:
+                                try:
+                                    tour.fecha_fin_oferta = datetime.strptime(fe, '%Y-%m-%d').date()
+                                except ValueError:
+                                    tour.fecha_fin_oferta = None
+                            else:
+                                tour.fecha_fin_oferta = None
+                            db.commit()
+                            success_message = f'Oferta guardada para "{tour.titulo}".'
+                    except ValueError as e:
+                        error_message = str(e) or 'Datos inválidos.'
+
+            ofertas = db.query(Tour).filter(Tour.activo == True, Tour.es_oferta == True).order_by(Tour.fecha_actualizacion.desc()).all()
+            tours_sin_oferta = db.query(Tour).filter(Tour.activo == True).filter(
+                (Tour.es_oferta == False) | (Tour.es_oferta == None)
+            ).order_by(Tour.titulo).all()
+            return render_template(
+                'admin_ofertas.html',
+                ofertas=ofertas,
+                tours_sin_oferta=tours_sin_oferta,
+                success_message=success_message,
+                error_message=error_message,
+            )
+        except Exception as e:
+            if db:
+                db.rollback()
+            logger.error(f"[ERROR] admin_ofertas: {e}")
+            try:
+                sin_oferta = db.query(Tour).filter(Tour.activo == True).order_by(Tour.titulo).all() if db else []
+            except Exception:
+                sin_oferta = []
+            return render_template(
+                'admin_ofertas.html',
+                ofertas=[],
+                tours_sin_oferta=sin_oferta,
+                success_message=None,
+                error_message='Error al guardar.',
+            )
+        finally:
+            if db:
+                db.close()
+
+    @app.route('/admin/contenido', methods=['GET', 'POST'])
+    @login_required
+    def admin_contenido():
+        """Editar textos y datos de la web (portada, contacto, etc.)."""
+        success_message = None
+        error_message = None
+        try:
+            if request.method == 'POST':
+                db = get_db_session()
+                try:
+                    for key in request.form:
+                        if key in ('csrf_token', 'submit'):
+                            continue
+                        row = db.query(ConfigWeb).filter_by(clave=key).first()
+                        if row:
+                            row.valor = (request.form.get(key) or '').strip() or None
+                        else:
+                            db.add(ConfigWeb(clave=key, valor=(request.form.get(key) or '').strip()))
+                    db.commit()
+                    success_message = 'Contenido guardado correctamente. Los cambios ya se ven en la web.'
+                except Exception as e:
+                    db.rollback()
+                    logger.error(f"[ERROR] admin_contenido: {e}")
+                    error_message = 'Error al guardar.'
+                finally:
+                    db.close()
+            config_list = []
+            config_valores = {}
+            try:
+                db = get_db_session()
+                config_list = db.query(ConfigWeb).order_by(ConfigWeb.clave).all()
+                if not config_list:
+                    defaults = [
+                        ('hero_etiqueta', 'DISEÑAMOS TUS SUEÑOS', 'Etiqueta portada'),
+                        ('hero_titulo', 'El mundo te espera.', 'Título portada 1'),
+                        ('hero_titulo_2', 'Nosotros te llevamos.', 'Título portada 2'),
+                        ('contacto_direccion', 'Calle Mayor, 12, Carcaixent', None),
+                        ('contacto_telefono', '+34 961 234 567', None),
+                        ('contacto_whatsapp', '+34961234567', None),
+                        ('contacto_titulo_form', 'The Briefing', None),
+                        ('contacto_subtitulo_form', 'Rellena los detalles para que Andrea prepare una propuesta a medida.', None),
+                        ('contacto_imagen_url', 'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=1000', None),
+                        ('contacto_mapa_url', 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d12365.111!2d-0.45!3d39.12!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0xd6196...!2sCarcaixent!5e0!3m2!1ses!2ses!4v1700000000000', None),
+                        ('nombre_agencia', 'Viatges Carcaixent', None),
+                        ('footer_texto', '© Viatges Carcaixent. Todos los derechos reservados.', None),
+                    ]
+                    for clave, valor, _ in defaults:
+                        db.add(ConfigWeb(clave=clave, valor=valor))
+                    db.commit()
+                    config_list = db.query(ConfigWeb).order_by(ConfigWeb.clave).all()
+                config_valores = {c.clave: (c.valor or '') for c in config_list}
+                db.close()
+            except Exception:
+                pass
+            return render_template(
+                'admin_contenido.html',
+                config_list=config_list,
+                config_valores=config_valores,
+                success_message=success_message,
+                error_message=error_message,
+            )
+        except Exception as e:
+            logger.error(f"[ERROR] admin_contenido: {e}")
+            return render_template(
+                'admin_contenido.html',
+                config_list=[],
+                config_valores={},
+                success_message=None,
+                error_message='Error al cargar.',
+            )
 
     @app.route('/admin/api/pedido/<int:pedido_id>', methods=['GET', 'PUT'])
     @login_required
@@ -4470,7 +4718,7 @@ try:
     def init_db_command():
         """Inicializa la base de datos"""
         init_db()
-        print("✅ Base de datos inicializada")
+        print("[OK] Base de datos inicializada")
 
     @app.cli.command('create-admin')
     def create_admin_command():
@@ -4480,13 +4728,13 @@ try:
             username = os.getenv('ADMIN_USER', 'admin')
             password = os.getenv('ADMIN_PASSWORD')
             if not password:
-                print("❌ ADMIN_PASSWORD no configurado en .env")
+                print("[ERROR] ADMIN_PASSWORD no configurado en .env")
                 return
             email = os.getenv('ADMIN_EMAIL', 'admin@agencia.com')
 
             usuario_existente = db.query(Usuario).filter_by(username=username).first()
             if usuario_existente:
-                print(f"⚠️ El usuario {username} ya existe")
+                print(f"[WARN] El usuario {username} ya existe")
                 return
 
             admin = Usuario()
@@ -4499,23 +4747,23 @@ try:
             db.add(admin)
             db.commit()
 
-            print(f"✅ Usuario administrador creado: {username}")
+            print(f"[OK] Usuario administrador creado: {username}")
             print(f"🔑 Password: {password}")
-            print("⚠️ CAMBIA LA CONTRASEÑA INMEDIATAMENTE")
+            print("[WARN] CAMBIA LA CONTRASEÑA INMEDIATAMENTE")
 
         except Exception as e:
             db.rollback()
-            print(f"❌ Error creando admin: {e}")
+            print(f"[ERROR] Error creando admin: {e}")
 
         finally:
             db.close()
 
-    logger.info("✅ Sistema de tours y administración cargado correctamente")
+    logger.info("[OK] Sistema de tours y administración cargado correctamente")
 
 except ImportError as e:
-    logger.warning(f"⚠️ Módulos de tours no disponibles: {e}")
+    logger.warning(f"[WARN] Módulos de tours no disponibles: {e}")
 except Exception as e:
-    logger.error(f"❌ Error cargando sistema de tours: {e}")
+    logger.error(f"[ERROR] Error cargando sistema de tours: {e}")
 
 # ==========================================
 # 9.5 REGISTRO DE BLUEPRINTS NUEVOS
@@ -4526,27 +4774,27 @@ try:
     from blueprints.clientes import clientes_bp, init_clientes_blueprint
     init_clientes_blueprint()
     app.register_blueprint(clientes_bp)
-    logger.info("✅ Blueprint de Clientes registrado (área de cliente)")
+    logger.info("[OK] Blueprint de Clientes registrado (área de cliente)")
 except Exception as e:
-    logger.warning(f"⚠️ No se pudo cargar blueprint de clientes: {e}")
+    logger.warning(f"[WARN] No se pudo cargar blueprint de clientes: {e}")
 
 # B) Admin API v2 (dashboard KPIs, analytics, reembolsos, audit)
 try:
     from blueprints.admin_api import admin_api_bp, init_admin_api_blueprint
     init_admin_api_blueprint()
     app.register_blueprint(admin_api_bp)
-    logger.info("✅ Blueprint Admin API v2 registrado")
+    logger.info("[OK] Blueprint Admin API v2 registrado")
 except Exception as e:
-    logger.warning(f"⚠️ No se pudo cargar blueprint Admin API v2: {e}")
+    logger.warning(f"[WARN] No se pudo cargar blueprint Admin API v2: {e}")
 
 # C) SEO & Compliance (sitemap, robots.txt, legal pages, cookie consent)
 try:
     from core.seo_compliance import seo_bp, init_seo_blueprint
     init_seo_blueprint()
     app.register_blueprint(seo_bp)
-    logger.info("✅ Blueprint SEO & Compliance registrado")
+    logger.info("[OK] Blueprint SEO & Compliance registrado")
 except Exception as e:
-    logger.warning(f"⚠️ No se pudo cargar blueprint SEO: {e}")
+    logger.warning(f"[WARN] No se pudo cargar blueprint SEO: {e}")
 
 # D) Inicializar servicios de booking y notificaciones
 try:
@@ -4583,33 +4831,16 @@ try:
             return jsonify(resultado), 400
         return jsonify(resultado)
     
-    logger.info("✅ Servicios de Booking y Notificaciones inicializados")
+    logger.info("[OK] Servicios de Booking y Notificaciones inicializados")
 except Exception as e:
-    logger.warning(f"⚠️ No se pudieron cargar servicios de booking/notificaciones: {e}")
+    logger.warning(f"[WARN] No se pudieron cargar servicios de booking/notificaciones: {e}")
 
 # E) Crear tablas nuevas si no existen
 try:
     from database import init_db
     init_db()
 except Exception as e:
-    logger.warning(f"⚠️ No se pudieron crear tablas nuevas: {e}")
-
-# ==========================================
-# 10. ARRANQUE
-# ==========================================
-
-if __name__ == '__main__':
-    # Determinar entorno
-    FLASK_ENV = os.getenv("FLASK_ENV", "production")
-    DEBUG = FLASK_ENV == "development"
-    
-    print("\n" + "="*50)
-    print(f"🚀 VIATGES CARCAIXENT SYSTEM ONLINE")
-    print(f"📡 Entorno: {FLASK_ENV} | Debug: {DEBUG}")
-    print(f"🔐 Seguridad: {'ACTIVA' if orchestrator else 'LIMITADA'}")
-    print("="*50 + "\n")
-    
-    app.run(host='0.0.0.0', port=8000, debug=DEBUG)
+    logger.warning(f"[WARN] No se pudieron crear tablas nuevas: {e}")
 
 # ==========================================
 # CACHE REDIS CONFIGURATION
@@ -4619,16 +4850,16 @@ if RedisCache:
         cache = RedisCache()
         if getattr(cache, 'available', False):
             app.cache = cache
-            logger.info("✅ Cache Redis habilitada")
+            logger.info("[OK] Cache Redis habilitada")
         else:
             app.cache = None
-            logger.warning("⚠️ Redis no disponible")
+            logger.warning("[WARN] Redis no disponible")
     except Exception as e:
         app.cache = None
-        logger.warning(f"⚠️ No se pudo inicializar cache: {e}")
+        logger.warning(f"[WARN] No se pudo inicializar cache: {e}")
 else:
     app.cache = None
-    logger.info("ℹ️ Cache deshabilitada (módulo no disponible)")
+    logger.info("[INFO] Cache deshabilitada (módulo no disponible)")
 
 
 # ==========================================
@@ -4637,11 +4868,11 @@ else:
 if init_metrics:
     try:
         init_metrics(app)
-        logger.info("✅ Métricas Prometheus habilitadas en /metrics")
+        logger.info("[OK] Métricas Prometheus habilitadas en /metrics")
     except Exception as e:
-        logger.warning(f"⚠️ No se pudieron inicializar métricas: {e}")
+        logger.warning(f"[WARN] No se pudieron inicializar métricas: {e}")
 else:
-    logger.info("ℹ️ Monitoring deshabilitado (módulo no disponible)")
+    logger.info("[INFO] Monitoring deshabilitado (módulo no disponible)")
 
 
 # ==========================================
@@ -4656,13 +4887,30 @@ try:
             "allow_headers": ["Content-Type", "Authorization"]
         }
     })
-    logger.info(f"✅ CORS habilitado para /api/* → orígenes: {cors_origins}")
+    logger.info(f"[OK] CORS habilitado para /api/* → orígenes: {cors_origins}")
 except Exception as e:
-    logger.warning(f"⚠️ No se pudo configurar CORS: {e}")
+    logger.warning(f"[WARN] No se pudo configurar CORS: {e}")
 
 try:
     _init_calendar_scheduler()
 except Exception as e:
-    logger.warning(f"⚠️ No se pudo iniciar scheduler de precios calendario: {e}")
+    logger.warning(f"[WARN] No se pudo iniciar scheduler de precios calendario: {e}")
 
-logger.info("✅ Aplicación inicializada correctamente")
+logger.info("[OK] Aplicación inicializada correctamente")
+
+# ==========================================
+# 10. ARRANQUE
+# ==========================================
+
+if __name__ == '__main__':
+    # Determinar entorno
+    FLASK_ENV = os.getenv("FLASK_ENV", "production")
+    DEBUG = FLASK_ENV == "development"
+    
+    print("\n" + "="*50)
+    print(f"[START] VIATGES CARCAIXENT SYSTEM ONLINE")
+    print(f"[NET] Entorno: {FLASK_ENV} | Debug: {DEBUG}")
+    print(f"[SEC] Seguridad: {'ACTIVA' if orchestrator else 'LIMITADA'}")
+    print("="*50 + "\n")
+    
+    app.run(host='0.0.0.0', port=8000, debug=DEBUG)

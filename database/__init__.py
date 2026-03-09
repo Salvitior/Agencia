@@ -26,7 +26,8 @@ from .models import (
     Cliente,
     Expediente,
     Pasajero,
-    Factura
+    Factura,
+    ConfigWeb,
 )
 
 # Nuevos modelos de clientes (área de cliente, auditoría, RGPD)
@@ -65,6 +66,7 @@ __all__ = [
     'Expediente',
     'Pasajero',
     'Factura',
+    'ConfigWeb',
     # Models - Clientes
     'ClienteUsuario',
     'PasajeroFrecuente',

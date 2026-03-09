@@ -43,7 +43,7 @@
 
                 <aside class="boutique-info" data-aos="fade-right">
                     <div class="office-visual">
-                        <img src="https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=1000"
+                        <img src="{{ config.get('contacto_imagen_url', 'https://images.unsplash.com/photo-1497366216548-37526070297c?q=80&w=1000') }}"
                             alt="Oficina HQ">
                         <div class="visual-label">CARCAIXENT HQ</div>
                     </div>
@@ -51,16 +51,16 @@
                     <div class="contact-details-luxe">
                         <div class="detail-item">
                             <small>UBICACIÓN</small>
-                            <p>Calle Mayor, 12, Carcaixent</p>
-                            <a href="#" class="btn-map-link">
+                            <p>{{ config.get('contacto_direccion', 'Calle Mayor, 12, Carcaixent') }}</p>
+                            <a href="https://www.google.com/maps/search/{{ config.get('contacto_direccion', '') | urlencode }}" target="_blank" rel="noopener" class="btn-map-link">
                                 <span>VER EN GOOGLE MAPS</span>
                                 <div class="line-effect"></div>
                             </a>
                         </div>
                         <div class="detail-item">
                             <small>CANAL DIRECTO</small>
-                            <p>+34 961 234 567</p>
-                            <a href="#" class="btn-whatsapp-priority">
+                            <p>{{ config.get('contacto_telefono', '+34 961 234 567') }}</p>
+                            <a href="https://wa.me/{{ config.get('contacto_whatsapp', '34961234567') | replace(' ', '') }}" target="_blank" rel="noopener" class="btn-whatsapp-priority">
                                 <span class="pulse-icon"></span>
                                 <i class="fab fa-whatsapp"></i>
                                 <span>WHATSAPP PRIORITARIO</span>
@@ -72,8 +72,8 @@
                 <div class="briefing-form-container" data-aos="fade-left">
                     <div class="paper-effect">
                         <div class="form-title">
-                            <h2>The Briefing</h2>
-                            <p>Rellena los detalles para que Andrea prepare una propuesta a medida.</p>
+                            <h2>{{ config.get('contacto_titulo_form', 'The Briefing') }}</h2>
+                            <p>{{ config.get('contacto_subtitulo_form', 'Rellena los detalles para que Andrea prepare una propuesta a medida.') }}</p>
                         </div>
 
                         <form class="briefing-form">
@@ -134,7 +134,7 @@
                 <span>CÓMO LLEGAR</span>
             </div>
             <iframe
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d12365.111!2d-0.45!3d39.12!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0xd6196...!2sCarcaixent!5e0!3m2!1ses!2ses!4v1700000000000"
+                src="{{ config.get('contacto_mapa_url', 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d12365.111!2d-0.45!3d39.12!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0xd6196...!2sCarcaixent!5e0!3m2!1ses!2ses!4v1700000000000') }}"
                 width="100%" height="450" style="border:0; filter: grayscale(1) invert(0.9);" allowfullscreen=""
                 loading="lazy"></iframe>
         </div>

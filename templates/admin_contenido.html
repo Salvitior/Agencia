@@ -1,0 +1,88 @@
+{% extends "admin_base.html" %}
+{% block title %}Contenido de la web{% endblock %}
+{% block page_title %}Contenido de la web{% endblock %}
+
+{% block topbar_actions %}
+<a href="{{ url_for('home') }}" target="_blank" class="btn btn-ghost btn-sm">Ver web</a>
+{% endblock %}
+
+{% block content %}
+
+<nav class="breadcrumb-wrap" style="margin-bottom:20px;">
+  <a href="/admin/dashboard" style="color:var(--text2);text-decoration:none;font-size:12px;">Dashboard</a>
+  <span style="color:var(--text3);margin:0 6px;">/</span>
+  <span style="font-size:12px;color:var(--text);">Contenido de la web</span>
+</nav>
+
+<p style="font-size:15px;color:var(--text2);margin-bottom:24px;max-width:560px;">
+  Aquí puedes cambiar los textos y datos que aparecen en la portada y en la página de contacto. Guarda los cambios y verás el resultado en la web al instante.
+</p>
+
+{% if success_message %}
+<div class="alert alert-success">
+  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+  {{ success_message }}
+</div>
+{% endif %}
+{% if error_message %}
+<div class="alert alert-error">
+  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+  {{ error_message }}
+</div>
+{% endif %}
+
+<form method="POST" action="/admin/contenido">
+
+  {% set secciones = [
+    ('Portada (página de inicio)', ['hero_etiqueta', 'hero_titulo', 'hero_titulo_2']),
+    ('Contacto', ['contacto_direccion', 'contacto_telefono', 'contacto_whatsapp', 'contacto_titulo_form', 'contacto_subtitulo_form', 'contacto_imagen_url', 'contacto_mapa_url']),
+    ('General', ['nombre_agencia', 'footer_texto'])
+  ] %}
+
+  {% for titulo_seccion, claves in secciones %}
+  <div class="card" style="margin-bottom:24px;">
+    <div class="card-header">
+      <div class="card-title" style="font-size:16px;">{{ titulo_seccion }}</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:18px;">
+      {% for clave in claves %}
+        {% set valor = config_valores.get(clave, '') %}
+        <div class="form-group">
+          <label class="form-label" for="cfg-{{ clave }}" style="font-size:13px;">
+            {% if clave == 'hero_etiqueta' %}Etiqueta pequeña sobre el título (ej. DISEÑAMOS TUS SUEÑOS){% endif %}
+            {% if clave == 'hero_titulo' %}Título principal, primera línea (ej. El mundo te espera.){% endif %}
+            {% if clave == 'hero_titulo_2' %}Título principal, segunda línea (ej. Nosotros te llevamos.){% endif %}
+            {% if clave == 'contacto_direccion' %}Dirección de la oficina{% endif %}
+            {% if clave == 'contacto_telefono' %}Teléfono (cómo se muestra){% endif %}
+            {% if clave == 'contacto_whatsapp' %}Número para WhatsApp (solo números, ej. 34961234567){% endif %}
+            {% if clave == 'contacto_titulo_form' %}Título del formulario (ej. The Briefing){% endif %}
+            {% if clave == 'contacto_subtitulo_form' %}Texto bajo el título del formulario{% endif %}
+            {% if clave == 'contacto_imagen_url' %}URL de la imagen de la oficina{% endif %}
+            {% if clave == 'contacto_mapa_url' %}URL del mapa (iframe de Google Maps){% endif %}
+            {% if clave == 'nombre_agencia' %}Nombre de la agencia{% endif %}
+            {% if clave == 'footer_texto' %}Texto del pie de página{% endif %}
+            {% if not (clave.startswith('hero_') or clave.startswith('contacto_') or clave in ['nombre_agencia','footer_texto']) %}{{ clave }}{% endif %}
+          </label>
+          {% if clave == 'contacto_subtitulo_form' or clave == 'footer_texto' %}
+          <textarea class="form-control" id="cfg-{{ clave }}" name="{{ clave }}" rows="2" placeholder="Texto…">{{ valor }}</textarea>
+          {% else %}
+          <input class="form-control" id="cfg-{{ clave }}" type="text" name="{{ clave }}" value="{{ valor }}" placeholder="{% if 'url' in clave %}https://…{% else %}…{% endif %}">
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+      <p style="font-size:13px;color:var(--text2);margin:0;">Los cambios se aplican al guardar.</p>
+      <button type="submit" class="btn btn-primary" style="padding:12px 24px;font-size:14px;">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        Guardar todo el contenido
+      </button>
+    </div>
+  </div>
+</form>
+
+{% endblock %}

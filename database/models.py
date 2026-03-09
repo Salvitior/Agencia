@@ -84,6 +84,12 @@ class Tour(Base):
     keywords = Column(Text)
     destacado = Column(Boolean, default=False, index=True)
     
+    # Ofertas (visible en /ofertas, descuento y fecha fin)
+    es_oferta = Column(Boolean, default=False, index=True)
+    descuento_pct = Column(Float, nullable=True)  # ej. 15 = 15%
+    texto_oferta = Column(String(120), nullable=True)  # ej. "Últimas plazas", "-40%"
+    fecha_fin_oferta = Column(Date, nullable=True)
+    
     # ✅ NUEVO: Full-text search vector para búsqueda rápida
     from sqlalchemy.dialects.postgresql import TSVECTOR
     search_vector = Column(TSVECTOR)
@@ -147,7 +153,11 @@ class Tour(Base):
             'slug': self.slug,
             'keywords': self.keywords,
             'destacado': self.destacado,
-            'activo': self.activo
+            'activo': self.activo,
+            'es_oferta': getattr(self, 'es_oferta', False),
+            'descuento_pct': getattr(self, 'descuento_pct', None),
+            'texto_oferta': getattr(self, 'texto_oferta', None),
+            'fecha_fin_oferta': self.fecha_fin_oferta.isoformat() if getattr(self, 'fecha_fin_oferta', None) else None,
         }
         if include_salidas and self.salidas:
             data['salidas'] = [salida.to_dict() for salida in self.salidas]
@@ -508,3 +518,17 @@ class DuffelSearch(Base):
 
     def __repr__(self):
         return f"<DuffelSearch {self.origen}->{self.destino} {self.fecha}>"
+
+
+class ConfigWeb(Base):
+    """Configuración editable de la web (textos, contacto, etc.) para el panel admin."""
+    __tablename__ = 'config_web'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    clave = Column(String(80), unique=True, nullable=False, index=True)
+    valor = Column(Text, nullable=True)
+    descripcion = Column(String(255), nullable=True)
+    fecha_actualizacion = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<ConfigWeb {self.clave}>"

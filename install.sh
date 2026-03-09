@@ -241,6 +241,65 @@ validate_compose() {
     ok "docker-compose.yml válido"
 }
 
+find_latest_backup() {
+    find "$ROOT_DIR/backups" -maxdepth 1 -type f \
+        \( -name 'agencia_*.sql' -o -name 'agencia_*.sql.gz' \) \
+        -size +0c \
+        ! -name 'agencia_.sql' \
+        -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n1 | cut -d' ' -f2-
+}
+
+wait_for_postgres_ready() {
+    local db_user db_name
+    db_user="$(sed -n 's/^DB_USER=//p' "$ROOT_DIR/.env" | head -n1)"
+    db_name="$(sed -n 's/^DB_NAME=//p' "$ROOT_DIR/.env" | head -n1)"
+
+    [[ -n "$db_user" ]] || fail "DB_USER no está definido en .env"
+    [[ -n "$db_name" ]] || fail "DB_NAME no está definido en .env"
+
+    for _ in $(seq 1 60); do
+        if docker compose exec -T postgres pg_isready -U "$db_user" -d "$db_name" >/dev/null 2>&1; then
+            ok "PostgreSQL listo para importar datos"
+            return 0
+        fi
+        sleep 1
+    done
+
+    docker compose logs --tail=100 postgres || true
+    fail "PostgreSQL no estuvo listo a tiempo durante la instalación"
+}
+
+restore_seed_database_if_available() {
+    local latest_backup tour_count restored_count
+    latest_backup="$(find_latest_backup)"
+
+    if [[ -z "$latest_backup" ]]; then
+        warn "No se encontró dump en backups/. La instalación seguirá con base vacía"
+        return 0
+    fi
+
+    log "Dump detectado: $latest_backup"
+    log "Levantando PostgreSQL para precargar la base"
+    docker compose up -d postgres
+    wait_for_postgres_ready
+
+    tour_count="$(docker compose exec -T postgres psql -U "$(sed -n 's/^DB_USER=//p' .env | head -n1)" -d "$(sed -n 's/^DB_NAME=//p' .env | head -n1)" -tAc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'tours';" | tr -d '[:space:]')"
+
+    if [[ "$tour_count" == "1" && "${FORCE_RESTORE_BACKUP:-false}" != "true" ]]; then
+        local existing_tours
+        existing_tours="$(docker compose exec -T postgres psql -U "$(sed -n 's/^DB_USER=//p' .env | head -n1)" -d "$(sed -n 's/^DB_NAME=//p' .env | head -n1)" -tAc "SELECT COUNT(*) FROM tours;" | tr -d '[:space:]')"
+        if [[ "${existing_tours:-0}" != "0" ]]; then
+            warn "La base ya tiene datos (${existing_tours} tours). No se sobrescribe"
+            warn "Si quieres forzar la restauración, ejecuta: FORCE_RESTORE_BACKUP=true ./install.sh"
+            return 0
+        fi
+    fi
+
+    log "Importando dump en PostgreSQL"
+    restored_count="$(./scripts/import_db_dump.sh "$latest_backup")"
+    ok "Base precargada correctamente (${restored_count} tours)"
+}
+
 main() {
     printf '%b\n' "${BLUE}Instalación completa de Agencia${NC}"
     ensure_docker_available
@@ -248,6 +307,8 @@ main() {
     ensure_node_dependencies
     ensure_env_file
     validate_compose
+    chmod +x "$ROOT_DIR/scripts/export_db_dump.sh" "$ROOT_DIR/scripts/import_db_dump.sh" || true
+    restore_seed_database_if_available
 
     chmod +x "$ROOT_DIR/start.sh" "$ROOT_DIR/start_all.sh" "$ROOT_DIR/install.sh" || true
 
@@ -260,6 +321,8 @@ Siguiente paso:
 
 La app arrancará en:
   http://localhost:8000
+
+Si hay un dump válido en backups/, el instalador deja la base restaurada automáticamente.
 
 Para Stripe en local:
   - añade STRIPE_PUBLIC_KEY y STRIPE_SECRET_KEY en .env
